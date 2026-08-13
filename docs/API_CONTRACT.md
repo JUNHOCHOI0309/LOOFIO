@@ -49,6 +49,18 @@ POST   /api/v1/businesses/{businessId}/imports
 GET    /api/v1/businesses/{businessId}/imports/{importId}
 ```
 
+Appointment CSV의 구현 endpoint는 다음과 같다.
+
+```text
+POST   /api/v1/businesses/{businessId}/imports/appointments/preview
+POST   /api/v1/businesses/{businessId}/imports/appointments
+GET    /api/v1/businesses/{businessId}/imports/{importId}
+```
+
+저장 endpoint는 `multipart/form-data`의 `file`과 `Idempotency-Key` 헤더를 요구한다.
+동일 tenant, business, key에 같은 파일을 다시 보내면 기존 import 결과를 반환하고, 다른 파일을 보내면 `IDEMPOTENCY_CONFLICT`를 반환한다.
+유효하지 않은 행이 하나라도 있으면 예약 데이터를 부분 저장하지 않는다.
+
 ## Opportunities
 
 ```text
