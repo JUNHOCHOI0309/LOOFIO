@@ -84,3 +84,16 @@ def test_request_validation_uses_standard_error_contract() -> None:
     assert error["code"] == "VALIDATION_ERROR"
     assert error["message"] == "요청을 처리할 수 없습니다."
     assert error["details"]
+
+
+def test_csv_preview_allows_local_web_origin() -> None:
+    response = client.options(
+        "/api/v1/businesses/biz_demo/imports/appointments/preview",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
