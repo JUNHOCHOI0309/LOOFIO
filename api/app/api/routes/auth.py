@@ -3,7 +3,7 @@ from fastapi.responses import RedirectResponse
 
 from app.auth.oauth import OAuthConfigurationError, get_oauth_client, get_settings, profile_from_token
 from app.auth.store import AuthStoreUnavailable
-from app.schemas.auth import AuthenticatedUser, TenantMembership
+from app.schemas.auth import AuthenticatedUser, CreateTenantRequest, TenantMembership
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -34,6 +34,7 @@ async def complete_login(provider: str, request: Request) -> RedirectResponse:
         profile = await profile_from_token(provider, client, token)
         user = request.app.state.auth_store.find_or_create_user(profile)
         session_id = request.app.state.auth_store.create_session(user.user_id)
+        destination = "/onboarding" if not request.app.state.auth_store.list_tenants(user.user_id) else "/"
     except OAuthConfigurationError as error:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -46,7 +47,7 @@ async def complete_login(provider: str, request: Request) -> RedirectResponse:
         ) from error
 
     request.session["session_id"] = session_id
-    return RedirectResponse(f"{settings.app_origin}/?login=success", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(f"{settings.app_origin}{destination}?login=success", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get("/me", response_model=AuthenticatedUser)
@@ -84,6 +85,17 @@ async def switch_active_tenant(tenant_id: str, request: Request) -> Authenticate
     if not user:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "FORBIDDEN", "message": "해당 Tenant에 접근할 수 없습니다."})
     return user
+
+
+@router.post("/tenants", response_model=AuthenticatedUser, status_code=status.HTTP_201_CREATED)
+async def create_tenant(payload: CreateTenantRequest, request: Request) -> AuthenticatedUser:
+    user = _require_user(request)
+    session_id = request.session.get("session_id")
+    membership = request.app.state.auth_store.create_tenant(user.user_id, payload.name)
+    active_user = request.app.state.auth_store.switch_active_tenant(session_id, membership.tenant_id)
+    if not active_user:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"code": "INTERNAL_ERROR", "message": "Tenant를 활성화하지 못했습니다."})
+    return active_user
 
 
 def _resolve_user(request: Request) -> AuthenticatedUser | None:

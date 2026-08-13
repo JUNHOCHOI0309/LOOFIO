@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from pydantic import Field
 
 
 class AuthenticatedUser(BaseModel):
@@ -14,3 +15,7 @@ class TenantMembership(BaseModel):
     tenant_id: str
     name: str
     role: str
+
+
+class CreateTenantRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=120)

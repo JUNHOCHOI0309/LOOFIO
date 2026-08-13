@@ -19,6 +19,7 @@ class AuthStore(Protocol):
     def resolve_session(self, session_id: str) -> AuthenticatedUser | None: ...
     def revoke_session(self, session_id: str) -> None: ...
     def list_tenants(self, user_id: str) -> list[TenantMembership]: ...
+    def create_tenant(self, user_id: str, name: str) -> TenantMembership: ...
     def switch_active_tenant(self, session_id: str, tenant_id: str) -> AuthenticatedUser | None: ...
 
 
@@ -92,6 +93,16 @@ class PostgresAuthStore:
             )
             return [TenantMembership(tenant_id=str(row["id"]), name=row["name"], role=row["role"]) for row in cursor.fetchall()]
 
+    def create_tenant(self, user_id: str, name: str) -> TenantMembership:
+        with self._connection() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute("INSERT INTO tenants (name) VALUES (%s) RETURNING id, name", (name.strip(),))
+            tenant = cursor.fetchone()
+            cursor.execute(
+                "INSERT INTO tenant_members (tenant_id, user_id, role) VALUES (%s, %s, 'owner')",
+                (tenant["id"], user_id),
+            )
+            return TenantMembership(tenant_id=str(tenant["id"]), name=tenant["name"], role="owner")
+
     def switch_active_tenant(self, session_id: str, tenant_id: str) -> AuthenticatedUser | None:
         with self._connection() as connection, connection.cursor() as cursor:
             cursor.execute(
@@ -150,6 +161,11 @@ class InMemoryAuthStore:
 
     def list_tenants(self, user_id: str) -> list[TenantMembership]:
         return self.memberships.get(user_id, [])
+
+    def create_tenant(self, user_id: str, name: str) -> TenantMembership:
+        membership = TenantMembership(tenant_id=str(uuid4()), name=name.strip(), role="owner")
+        self.memberships.setdefault(user_id, []).append(membership)
+        return membership
 
     def switch_active_tenant(self, session_id: str, tenant_id: str) -> AuthenticatedUser | None:
         user = self.sessions.get(session_id)
