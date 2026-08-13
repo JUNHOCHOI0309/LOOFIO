@@ -49,6 +49,25 @@ API 테스트는 프로젝트 루트에서 다음 명령으로 실행합니다.
 .\.venv\Scripts\python -m pytest
 ```
 
+## Direct OAuth 설정
+
+인증은 FastAPI backend가 처리하는 Google/Naver Authorization Code Flow를 사용합니다. `.env.example`을 `.env`로 복사한 뒤, 다음 값을 환경별 Secret으로 설정합니다.
+
+- `SESSION_SECRET`: 환경마다 다른 고엔트로피 문자열
+- `SESSION_COOKIE_SECURE`: local은 `false`, HTTPS 운영 환경은 `true`
+- `APP_ORIGIN`, `API_ORIGIN`
+- `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`
+- `NAVER_OAUTH_CLIENT_ID`, `NAVER_OAUTH_CLIENT_SECRET`
+
+로컬 callback URL은 다음과 같이 등록합니다.
+
+```text
+http://localhost:8000/api/v1/auth/google/callback
+http://localhost:8000/api/v1/auth/naver/callback
+```
+
+OAuth Secret은 repository 또는 frontend 환경 변수에 넣지 않습니다.
+
 ## 운영 원칙
 
 구현 전에 `docs/AGENTS.md`와 관련 계약 문서를 따릅니다. 특히 Opportunity의 수치 계산과 탐지는 deterministic backend가 수행하며, AI는 구조화된 결과를 설명하고 행동을 제안합니다.
