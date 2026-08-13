@@ -12,9 +12,11 @@ from app.api.routes.businesses import router as businesses_router
 from app.api.routes.detectors import router as detectors_router
 from app.api.routes.imports import router as imports_router
 from app.api.routes.metrics import router as metrics_router
+from app.api.routes.opportunities import router as opportunities_router
 from app.auth.store import PostgresAuthStore
 from app.imports.store import PostgresAppointmentImportStore
 from app.metrics.store import PostgresAppointmentMetricStore
+from app.opportunities.store import PostgresOpportunityStore
 
 app = FastAPI(
     title="LOOFIO API",
@@ -24,6 +26,7 @@ app = FastAPI(
 app.state.auth_store = PostgresAuthStore(os.getenv("DATABASE_URL"))
 app.state.import_store = PostgresAppointmentImportStore(os.getenv("DATABASE_URL"))
 app.state.metric_store = PostgresAppointmentMetricStore(os.getenv("DATABASE_URL"))
+app.state.opportunity_store = PostgresOpportunityStore(os.getenv("DATABASE_URL"))
 
 configured_session_secret = os.getenv("SESSION_SECRET")
 secure_session_cookie = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
@@ -47,6 +50,7 @@ app.include_router(businesses_router, prefix="/api/v1")
 app.include_router(detectors_router, prefix="/api/v1")
 app.include_router(imports_router, prefix="/api/v1")
 app.include_router(metrics_router, prefix="/api/v1")
+app.include_router(opportunities_router, prefix="/api/v1")
 
 
 @app.get("/api/v1/health", tags=["system"])

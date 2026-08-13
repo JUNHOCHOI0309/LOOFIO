@@ -91,6 +91,16 @@ GET    /api/v1/businesses/{businessId}/detectors/low-demand-slots
 LowDemandSlot은 같은 요일의 관측된 2시간 슬롯과 비교해 상대 예약 수요가 낮은 후보를 반환한다.
 최소 8주 관측과 `DemandIndex <= 0.65`가 필요하다. 반환값은 Observation 후보이며 Opportunity, 예상 매출, Recommendation을 의미하지 않는다.
 
+## Opportunities
+
+```text
+POST   /api/v1/businesses/{businessId}/opportunities/refresh
+GET    /api/v1/businesses/{businessId}/opportunities
+```
+
+`refresh`는 LowDemandSlot 후보를 tenant/business 범위의 Opportunity로 생성하거나 갱신한다. 응답은 Observation, 가정 기반 Estimate, limitations, detector version, score, confidence를 분리한다.
+Estimate는 실제 매출이나 보장값이 아니며, `Recommendation`이나 외부 실행을 포함하지 않는다.
+
 ## Recommendations
 
 ```text
