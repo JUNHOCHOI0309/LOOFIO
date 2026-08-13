@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 
 from app.auth.oauth import OAuthConfigurationError, get_oauth_client, get_settings, profile_from_token
@@ -53,5 +53,6 @@ async def current_user(request: Request) -> AuthenticatedUser:
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(request: Request) -> None:
+async def logout(request: Request, response: Response) -> None:
     request.session.clear()
+    response.delete_cookie("session")
