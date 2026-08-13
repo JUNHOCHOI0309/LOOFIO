@@ -7,6 +7,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 from app.schemas.auth import AuthenticatedUser, TenantMembership
+from app.schemas.businesses import BusinessLocation, MedicalDomain
 
 
 class AuthStoreUnavailable(RuntimeError):
@@ -21,6 +22,8 @@ class AuthStore(Protocol):
     def list_tenants(self, user_id: str) -> list[TenantMembership]: ...
     def create_tenant(self, user_id: str, name: str) -> TenantMembership: ...
     def switch_active_tenant(self, session_id: str, tenant_id: str) -> AuthenticatedUser | None: ...
+    def create_business_with_location(self, tenant_id: str, name: str, medical_domain: MedicalDomain, location_name: str, timezone: str) -> BusinessLocation: ...
+    def list_businesses(self, tenant_id: str) -> list[BusinessLocation]: ...
 
 
 class PostgresAuthStore:
@@ -115,6 +118,51 @@ class PostgresAuthStore:
                 return None
         return self.resolve_session(session_id)
 
+    def create_business_with_location(
+        self,
+        tenant_id: str,
+        name: str,
+        medical_domain: MedicalDomain,
+        location_name: str,
+        timezone: str,
+    ) -> BusinessLocation:
+        with self._connection() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                "INSERT INTO businesses (tenant_id, name, medical_domain, timezone) VALUES (%s, %s, %s, %s) RETURNING id",
+                (tenant_id, name.strip(), medical_domain, timezone),
+            )
+            business_id = str(cursor.fetchone()["id"])
+            cursor.execute(
+                "INSERT INTO locations (tenant_id, business_id, name, timezone) VALUES (%s, %s, %s, %s) RETURNING id",
+                (tenant_id, business_id, location_name.strip(), timezone),
+            )
+            location_id = str(cursor.fetchone()["id"])
+        return BusinessLocation(
+            business_id=business_id,
+            location_id=location_id,
+            tenant_id=tenant_id,
+            name=name.strip(),
+            medical_domain=medical_domain,
+            location_name=location_name.strip(),
+            timezone=timezone,
+        )
+
+    def list_businesses(self, tenant_id: str) -> list[BusinessLocation]:
+        with self._connection() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                "SELECT b.id AS business_id, l.id AS location_id, b.tenant_id, b.name, b.medical_domain, l.name AS location_name, b.timezone "
+                "FROM businesses b JOIN locations l ON l.business_id = b.id AND l.tenant_id = b.tenant_id "
+                "WHERE b.tenant_id = %s ORDER BY b.created_at ASC, l.created_at ASC",
+                (tenant_id,),
+            )
+            return [
+                BusinessLocation(
+                    business_id=str(row["business_id"]), location_id=str(row["location_id"]), tenant_id=str(row["tenant_id"]),
+                    name=row["name"], medical_domain=row["medical_domain"], location_name=row["location_name"], timezone=row["timezone"],
+                )
+                for row in cursor.fetchall()
+            ]
+
     def _connection(self):
         if not self.database_url:
             raise AuthStoreUnavailable("DATABASE_URL 환경 변수가 필요합니다.")
@@ -131,11 +179,13 @@ class InMemoryAuthStore:
     users: dict[tuple[str, str], AuthenticatedUser]
     sessions: dict[str, AuthenticatedUser]
     memberships: dict[str, list[TenantMembership]]
+    businesses: dict[str, list[BusinessLocation]]
 
     def __init__(self) -> None:
         self.users = {}
         self.sessions = {}
         self.memberships = {}
+        self.businesses = {}
 
     def find_or_create_user(self, identity: AuthenticatedUser) -> AuthenticatedUser:
         key = (identity.provider, identity.provider_subject)
@@ -175,6 +225,24 @@ class InMemoryAuthStore:
         self.sessions[session_id] = updated
         self.users[(updated.provider, updated.provider_subject)] = updated
         return updated
+
+    def create_business_with_location(
+        self,
+        tenant_id: str,
+        name: str,
+        medical_domain: MedicalDomain,
+        location_name: str,
+        timezone: str,
+    ) -> BusinessLocation:
+        business = BusinessLocation(
+            business_id=str(uuid4()), location_id=str(uuid4()), tenant_id=tenant_id, name=name.strip(), medical_domain=medical_domain,
+            location_name=location_name.strip(), timezone=timezone,
+        )
+        self.businesses.setdefault(tenant_id, []).append(business)
+        return business
+
+    def list_businesses(self, tenant_id: str) -> list[BusinessLocation]:
+        return self.businesses.get(tenant_id, [])
 
 
 def _optional_id(value: object) -> str | None:

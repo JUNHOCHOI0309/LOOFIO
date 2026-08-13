@@ -32,7 +32,7 @@ export default function OnboardingPage() {
         method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: tenantName }),
       });
       if (!response.ok) { const payload = await response.json(); setMessage(payload.error?.message ?? "Tenant를 만들지 못했습니다."); return; }
-      window.location.assign("/");
+      window.location.assign("/onboarding/business");
     } catch { setMessage("API에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요."); }
     finally { setIsSaving(false); }
   }
