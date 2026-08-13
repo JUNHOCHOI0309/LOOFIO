@@ -17,7 +17,8 @@ def test_current_user_requires_authentication() -> None:
     }
 
 
-def test_login_requires_oauth_environment_configuration() -> None:
+def test_login_requires_oauth_environment_configuration(monkeypatch) -> None:
+    monkeypatch.delenv("SESSION_SECRET", raising=False)
     response = client.get("/api/v1/auth/google/login")
 
     assert response.status_code == 503
@@ -26,9 +27,8 @@ def test_login_requires_oauth_environment_configuration() -> None:
 
 
 def test_logout_clears_signed_session_cookie() -> None:
-    with TestClient(app) as browser:
-        browser.get("/api/v1/auth/me")
-        response = browser.post("/api/v1/auth/logout")
+    response = client.post("/api/v1/auth/logout")
 
     assert response.status_code == 204
-    assert "session=null" in response.headers["set-cookie"]
+    assert "session=\"\"" in response.headers["set-cookie"]
+    assert "Max-Age=0" in response.headers["set-cookie"]
