@@ -11,6 +11,7 @@ from app.api.routes.auth import router as auth_router
 from app.api.routes.businesses import router as businesses_router
 from app.api.routes.imports import router as imports_router
 from app.auth.store import PostgresAuthStore
+from app.imports.store import PostgresAppointmentImportStore
 
 app = FastAPI(
     title="LOOFIO API",
@@ -18,6 +19,7 @@ app = FastAPI(
     description="LOOFIO Hospital MVP API. API contracts are served under /api/v1.",
 )
 app.state.auth_store = PostgresAuthStore(os.getenv("DATABASE_URL"))
+app.state.import_store = PostgresAppointmentImportStore(os.getenv("DATABASE_URL"))
 
 configured_session_secret = os.getenv("SESSION_SECRET")
 secure_session_cookie = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
@@ -31,7 +33,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[os.getenv("APP_ORIGIN", "http://localhost:3000")],
     allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "X-Request-ID"],
+    allow_headers=["Content-Type", "Idempotency-Key", "X-Request-ID"],
     allow_credentials=True,
 )
 app.add_exception_handler(RequestValidationError, request_validation_exception_handler)

@@ -19,3 +19,14 @@ class AppointmentImportPreview(BaseModel):
     invalid_rows: int = Field(ge=0)
     errors: list[str]
     preview: list[AppointmentPreviewRow]
+
+
+class AppointmentImportResult(BaseModel):
+    import_id: str
+    business_id: str
+    total_rows: int = Field(ge=0)
+    imported_rows: int = Field(ge=0)
+    duplicate_rows: int = Field(ge=0)
+    invalid_rows: int = Field(ge=0)
+    status: str
+    replayed: bool = False
