@@ -72,6 +72,16 @@ Opportunity 생성은 기본적으로 backend detector job의 결과다.
 
 클라이언트가 임의 수치를 넣어 Opportunity를 생성하는 endpoint는 두지 않는다.
 
+## Metrics
+
+```text
+GET    /api/v1/businesses/{businessId}/metrics/appointments
+```
+
+이 endpoint는 저장된 Appointment를 deterministic하게 집계한 Observation을 반환한다.
+`actual_revenue`는 `completed` 상태의 `paid_amount` 합계만 의미하며, 예상 매출이나 Opportunity 추정값이 아니다.
+`start_at`, `end_at`을 지정할 때는 UTC offset을 포함한 ISO-8601 값을 사용한다.
+
 ## Recommendations
 
 ```text
