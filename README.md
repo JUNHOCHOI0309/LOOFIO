@@ -43,6 +43,12 @@ LOOFIO Hospital MVP의 초기 모노레포입니다. 사업 데이터를 기반�
 - API 문서: `http://localhost:8000/docs`
 - 상태 확인: `http://localhost:8000/api/v1/health`
 
+API 테스트는 프로젝트 루트에서 다음 명령으로 실행합니다.
+
+```powershell
+.\.venv\Scripts\python -m pytest
+```
+
 ## 운영 원칙
 
 구현 전에 `docs/AGENTS.md`와 관련 계약 문서를 따릅니다. 특히 Opportunity의 수치 계산과 탐지는 deterministic backend가 수행하며, AI는 구조화된 결과를 설명하고 행동을 제안합니다.
