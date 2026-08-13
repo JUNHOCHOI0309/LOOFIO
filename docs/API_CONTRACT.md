@@ -82,6 +82,15 @@ GET    /api/v1/businesses/{businessId}/metrics/appointments
 `actual_revenue`는 `completed` 상태의 `paid_amount` 합계만 의미하며, 예상 매출이나 Opportunity 추정값이 아니다.
 `start_at`, `end_at`을 지정할 때는 UTC offset을 포함한 ISO-8601 값을 사용한다.
 
+## Detector Candidates
+
+```text
+GET    /api/v1/businesses/{businessId}/detectors/low-demand-slots
+```
+
+LowDemandSlot은 같은 요일의 관측된 2시간 슬롯과 비교해 상대 예약 수요가 낮은 후보를 반환한다.
+최소 8주 관측과 `DemandIndex <= 0.65`가 필요하다. 반환값은 Observation 후보이며 Opportunity, 예상 매출, Recommendation을 의미하지 않는다.
+
 ## Recommendations
 
 ```text

@@ -9,6 +9,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.api.errors import http_exception_handler, request_validation_exception_handler
 from app.api.routes.auth import router as auth_router
 from app.api.routes.businesses import router as businesses_router
+from app.api.routes.detectors import router as detectors_router
 from app.api.routes.imports import router as imports_router
 from app.api.routes.metrics import router as metrics_router
 from app.auth.store import PostgresAuthStore
@@ -43,6 +44,7 @@ app.add_exception_handler(RequestValidationError, request_validation_exception_h
 app.add_exception_handler(HTTPException, http_exception_handler)
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(businesses_router, prefix="/api/v1")
+app.include_router(detectors_router, prefix="/api/v1")
 app.include_router(imports_router, prefix="/api/v1")
 app.include_router(metrics_router, prefix="/api/v1")
 
