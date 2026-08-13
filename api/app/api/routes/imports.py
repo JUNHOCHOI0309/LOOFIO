@@ -17,10 +17,13 @@ async def preview_appointment_import(
 ) -> AppointmentImportPreview:
     """Validate and normalize an appointments CSV without persisting source rows."""
     if not file.filename or not file.filename.lower().endswith(".csv"):
-        raise HTTPException(status_code=400, detail="A CSV file is required.")
+        raise HTTPException(status_code=400, detail={"code": "VALIDATION_ERROR", "message": "CSV 파일이 필요합니다."})
 
     raw_csv = await file.read()
     try:
         return preview_appointments_csv(business_id=business_id, raw_csv=raw_csv)
     except AppointmentImportError as error:
-        raise HTTPException(status_code=422, detail=str(error)) from error
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "VALIDATION_ERROR", "message": "CSV 데이터를 검증할 수 없습니다.", "details": [str(error)]},
+        ) from error
