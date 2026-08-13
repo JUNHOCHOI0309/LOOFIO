@@ -70,6 +70,8 @@ OAuth Secret은 repository 또는 frontend 환경 변수에 넣지 않습니다.
 
 로그인 세션은 JWT가 아닌 서버 저장형 세션입니다. 브라우저에는 서명된 opaque session ID만 보관하고, 사용자·OAuth identity·Tenant membership·세션 상태는 PostgreSQL에서 확인합니다.
 
+로컬 컴퓨터에 PostgreSQL이 이미 `5432` 포트를 사용 중인 경우를 피하기 위해 LOOFIO Docker PostgreSQL은 기본적으로 `5433`을 사용합니다.
+
 ## 운영 원칙
 
 구현 전에 `docs/AGENTS.md`와 관련 계약 문서를 따릅니다. 특히 Opportunity의 수치 계산과 탐지는 deterministic backend가 수행하며, AI는 구조화된 결과를 설명하고 행동을 제안합니다.
