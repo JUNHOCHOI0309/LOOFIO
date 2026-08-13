@@ -2,7 +2,8 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 
 from app.auth.oauth import OAuthConfigurationError, get_oauth_client, get_settings, profile_from_token
-from app.schemas.auth import AuthenticatedUser
+from app.auth.store import AuthStoreUnavailable
+from app.schemas.auth import AuthenticatedUser, TenantMembership
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -31,28 +32,73 @@ async def complete_login(provider: str, request: Request) -> RedirectResponse:
         client = get_oauth_client(provider, settings)
         token = await client.authorize_access_token(request)
         profile = await profile_from_token(provider, client, token)
+        user = request.app.state.auth_store.find_or_create_user(profile)
+        session_id = request.app.state.auth_store.create_session(user.user_id)
     except OAuthConfigurationError as error:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={"code": "AUTH_CONFIGURATION_REQUIRED", "message": str(error)},
         ) from error
+    except AuthStoreUnavailable as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "AUTH_STORAGE_UNAVAILABLE", "message": str(error)},
+        ) from error
 
-    request.session["identity"] = profile.model_dump()
+    request.session["session_id"] = session_id
     return RedirectResponse(f"{settings.app_origin}/?login=success", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get("/me", response_model=AuthenticatedUser)
 async def current_user(request: Request) -> AuthenticatedUser:
-    identity = request.session.get("identity")
-    if not identity:
+    user = _resolve_user(request)
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "AUTHENTICATION_REQUIRED", "message": "로그인이 필요합니다."},
         )
-    return AuthenticatedUser.model_validate(identity)
+    return user
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(request: Request, response: Response) -> None:
+    session_id = request.session.get("session_id")
+    if session_id:
+        request.app.state.auth_store.revoke_session(session_id)
     request.session.clear()
     response.delete_cookie("session")
+
+
+@router.get("/tenants", response_model=list[TenantMembership])
+async def my_tenants(request: Request) -> list[TenantMembership]:
+    user = _require_user(request)
+    return request.app.state.auth_store.list_tenants(user.user_id)
+
+
+@router.post("/active-tenant/{tenant_id}", response_model=AuthenticatedUser)
+async def switch_active_tenant(tenant_id: str, request: Request) -> AuthenticatedUser:
+    session_id = request.session.get("session_id")
+    if not session_id:
+        _raise_authentication_required()
+    user = request.app.state.auth_store.switch_active_tenant(session_id, tenant_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "FORBIDDEN", "message": "해당 Tenant에 접근할 수 없습니다."})
+    return user
+
+
+def _resolve_user(request: Request) -> AuthenticatedUser | None:
+    session_id = request.session.get("session_id")
+    if not session_id:
+        return None
+    return request.app.state.auth_store.resolve_session(session_id)
+
+
+def _require_user(request: Request) -> AuthenticatedUser:
+    user = _resolve_user(request)
+    if not user:
+        _raise_authentication_required()
+    return user
+
+
+def _raise_authentication_required() -> None:
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "AUTHENTICATION_REQUIRED", "message": "로그인이 필요합니다."})
