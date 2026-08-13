@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 
+from app.api.dependencies import require_authenticated_user
 from app.auth.oauth import OAuthConfigurationError, get_oauth_client, get_settings, profile_from_token
 from app.auth.store import AuthStoreUnavailable
 from app.schemas.auth import AuthenticatedUser, CreateTenantRequest, TenantMembership
@@ -52,13 +53,7 @@ async def complete_login(provider: str, request: Request) -> RedirectResponse:
 
 @router.get("/me", response_model=AuthenticatedUser)
 async def current_user(request: Request) -> AuthenticatedUser:
-    user = _resolve_user(request)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "AUTHENTICATION_REQUIRED", "message": "로그인이 필요합니다."},
-        )
-    return user
+    return require_authenticated_user(request)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -72,15 +67,14 @@ async def logout(request: Request, response: Response) -> None:
 
 @router.get("/tenants", response_model=list[TenantMembership])
 async def my_tenants(request: Request) -> list[TenantMembership]:
-    user = _require_user(request)
+    user = require_authenticated_user(request)
     return request.app.state.auth_store.list_tenants(user.user_id)
 
 
 @router.post("/active-tenant/{tenant_id}", response_model=AuthenticatedUser)
 async def switch_active_tenant(tenant_id: str, request: Request) -> AuthenticatedUser:
+    require_authenticated_user(request)
     session_id = request.session.get("session_id")
-    if not session_id:
-        _raise_authentication_required()
     user = request.app.state.auth_store.switch_active_tenant(session_id, tenant_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "FORBIDDEN", "message": "해당 Tenant에 접근할 수 없습니다."})
@@ -89,28 +83,10 @@ async def switch_active_tenant(tenant_id: str, request: Request) -> Authenticate
 
 @router.post("/tenants", response_model=AuthenticatedUser, status_code=status.HTTP_201_CREATED)
 async def create_tenant(payload: CreateTenantRequest, request: Request) -> AuthenticatedUser:
-    user = _require_user(request)
+    user = require_authenticated_user(request)
     session_id = request.session.get("session_id")
     membership = request.app.state.auth_store.create_tenant(user.user_id, payload.name)
     active_user = request.app.state.auth_store.switch_active_tenant(session_id, membership.tenant_id)
     if not active_user:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"code": "INTERNAL_ERROR", "message": "Tenant를 활성화하지 못했습니다."})
     return active_user
-
-
-def _resolve_user(request: Request) -> AuthenticatedUser | None:
-    session_id = request.session.get("session_id")
-    if not session_id:
-        return None
-    return request.app.state.auth_store.resolve_session(session_id)
-
-
-def _require_user(request: Request) -> AuthenticatedUser:
-    user = _resolve_user(request)
-    if not user:
-        _raise_authentication_required()
-    return user
-
-
-def _raise_authentication_required() -> None:
-    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "AUTHENTICATION_REQUIRED", "message": "로그인이 필요합니다."})

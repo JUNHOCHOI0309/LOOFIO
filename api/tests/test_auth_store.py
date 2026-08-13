@@ -32,3 +32,16 @@ def test_new_tenant_creates_owner_membership_and_can_be_activated() -> None:
     assert tenant.name == "LOOFIO 피부과"
     assert tenant.role == "owner"
     assert store.switch_active_tenant(session_id, tenant.tenant_id).active_tenant_id == tenant.tenant_id
+
+
+def test_businesses_are_scoped_to_their_tenant() -> None:
+    store = InMemoryAuthStore()
+    user = store.find_or_create_user(AuthenticatedUser(provider="google", provider_subject="subject-3"))
+    tenant = store.create_tenant(user.user_id, "LOOFIO 피부과")
+
+    business = store.create_business_with_location(
+        tenant.tenant_id, "LOOFIO 피부과", "DERMATOLOGY", "강남점", "Asia/Seoul"
+    )
+
+    assert store.list_businesses(tenant.tenant_id) == [business]
+    assert store.list_businesses("another-tenant") == []
