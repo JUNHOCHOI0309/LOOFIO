@@ -40,7 +40,7 @@ export default function Home() {
           <strong>데이터를 연결해<br />더 정확한 기회를 찾으세요.</strong>
           <a href="#">데이터 업로드 →</a>
         </div>
-        <div className="account"><div>J</div><p><strong>김지연</strong><small>Owner</small></p><span>⌄</span></div>
+        <a className="account" href="/login"><div>↗</div><p><strong>로그인</strong><small>계정을 연결하세요</small></p><span>›</span></a>
       </aside>
 
       <section className="workspace">
