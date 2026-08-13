@@ -20,3 +20,15 @@ def test_active_tenant_must_be_a_user_membership() -> None:
 
     assert store.switch_active_tenant(session_id, "tenant-b") is None
     assert store.switch_active_tenant(session_id, "tenant-a").active_tenant_id == "tenant-a"
+
+
+def test_new_tenant_creates_owner_membership_and_can_be_activated() -> None:
+    store = InMemoryAuthStore()
+    user = store.find_or_create_user(AuthenticatedUser(provider="google", provider_subject="subject-2"))
+    session_id = store.create_session(user.user_id)
+
+    tenant = store.create_tenant(user.user_id, "  LOOFIO 피부과  ")
+
+    assert tenant.name == "LOOFIO 피부과"
+    assert tenant.role == "owner"
+    assert store.switch_active_tenant(session_id, tenant.tenant_id).active_tenant_id == tenant.tenant_id
