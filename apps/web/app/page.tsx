@@ -30,7 +30,7 @@ export default function Home() {
         <div className="workspace-name">OO 피부과 <span>⌄</span></div>
         <nav aria-label="Main navigation">
           {navigation.map(([icon, item], index) => (
-            <a className={index === 0 ? "active" : ""} href="#" key={item}>
+            <a className={index === 0 ? "active" : ""} href={item === "Data" ? "/data" : "#"} key={item}>
               <span>{icon}</span>{item}
             </a>
           ))}
