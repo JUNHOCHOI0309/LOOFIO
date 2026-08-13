@@ -33,7 +33,10 @@ def test_preview_rejects_csv_without_required_columns() -> None:
     )
 
     assert response.status_code == 422
-    assert "Missing required columns" in response.json()["detail"]
+    error = response.json()["error"]
+    assert error["code"] == "VALIDATION_ERROR"
+    assert "Missing required columns" in error["details"][0]
+    assert error["request_id"]
 
 
 def test_preview_reports_invalid_rows_without_storing_raw_identifier() -> None:
@@ -53,3 +56,31 @@ def test_preview_reports_invalid_rows_without_storing_raw_identifier() -> None:
     body = response.json()
     assert body["invalid_rows"] == 1
     assert "UTC offset" in body["errors"][0]
+
+
+def test_preview_rejects_non_csv_with_standard_error_contract() -> None:
+    response = client.post(
+        "/api/v1/businesses/biz_demo/imports/appointments/preview",
+        headers={"X-Request-ID": "request-123"},
+        files={"file": ("appointments.xlsx", b"not-a-csv", "application/octet-stream")},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "error": {
+            "code": "VALIDATION_ERROR",
+            "message": "CSV 파일이 필요합니다.",
+            "details": [],
+            "request_id": "request-123",
+        }
+    }
+
+
+def test_request_validation_uses_standard_error_contract() -> None:
+    response = client.post("/api/v1/businesses/biz_demo/imports/appointments/preview")
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "VALIDATION_ERROR"
+    assert error["message"] == "요청을 처리할 수 없습니다."
+    assert error["details"]
