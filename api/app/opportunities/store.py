@@ -24,6 +24,7 @@ class OpportunityBusinessNotFound(RuntimeError):
 class OpportunityStore(Protocol):
     def refresh_low_demand(self, *, tenant_id: str, business_id: str, drafts: list[OpportunityDraft]) -> list[Opportunity]: ...
     def list_opportunities(self, *, tenant_id: str, business_id: str) -> list[Opportunity]: ...
+    def get_opportunity(self, *, tenant_id: str, opportunity_id: str) -> Opportunity: ...
 
 
 class PostgresOpportunityStore:
@@ -77,6 +78,17 @@ class PostgresOpportunityStore:
             )
             return [_opportunity_from_row(row) for row in cursor.fetchall()]
 
+    def get_opportunity(self, *, tenant_id: str, opportunity_id: str) -> Opportunity:
+        with self._connection() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                "SELECT * FROM opportunities WHERE id = %s AND tenant_id = %s",
+                (opportunity_id, tenant_id),
+            )
+            row = cursor.fetchone()
+            if not row:
+                raise OpportunityBusinessNotFound("해당 기회에 접근할 수 없습니다.")
+            return _opportunity_from_row(row)
+
     def _assert_business(self, cursor, tenant_id: str, business_id: str) -> None:
         cursor.execute("SELECT 1 FROM businesses WHERE id = %s AND tenant_id = %s", (business_id, tenant_id))
         if not cursor.fetchone():
@@ -122,6 +134,11 @@ class InMemoryOpportunityStore:
             reverse=True,
         )
 
+    def get_opportunity(self, *, tenant_id: str, opportunity_id: str) -> Opportunity:
+        for (item_tenant, _, _), opportunity in self.opportunities.items():
+            if item_tenant == tenant_id and opportunity.id == opportunity_id:
+                return opportunity
+        raise OpportunityBusinessNotFound("해당 기회에 접근할 수 없습니다.")
 
 def _opportunity_from_row(row: dict) -> Opportunity:
     return Opportunity(

@@ -1,6 +1,7 @@
 from uuid import uuid4
 
 from fastapi import HTTPException, Request, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -20,7 +21,7 @@ def error_response(
             "error": {
                 "code": code,
                 "message": message,
-                "details": details or [],
+                "details": jsonable_encoder(details or []),
                 "request_id": request_id or str(uuid4()),
             }
         },
