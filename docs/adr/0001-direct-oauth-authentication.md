@@ -21,7 +21,7 @@ Use provider-hosted OAuth 2.0 Authorization Code flows with the FastAPI API as t
 ## Consequences
 
 - OAuth Client IDs and Secrets must be registered in Google Cloud and NAVER Developers and supplied through environment-specific secret storage.
-- Every environment requires a distinct high-entropy `SESSION_SECRET`; production requires HTTPS.
+- Every environment requires a distinct high-entropy `SESSION_SECRET`. `SESSION_COOKIE_SECURE` is false only for local HTTP and must be true in HTTPS production.
 - OAuth provider redirects must match the configured callback exactly.
 - This decision does not authorize external marketing actions; approval requirements remain unchanged.
 

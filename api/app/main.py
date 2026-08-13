@@ -17,10 +17,11 @@ app = FastAPI(
 )
 
 configured_session_secret = os.getenv("SESSION_SECRET")
+secure_session_cookie = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
 app.add_middleware(
     SessionMiddleware,
     secret_key=configured_session_secret or secrets.token_urlsafe(32),
-    https_only=bool(configured_session_secret),
+    https_only=secure_session_cookie,
     same_site="lax",
 )
 app.add_middleware(

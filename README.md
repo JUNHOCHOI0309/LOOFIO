@@ -54,6 +54,7 @@ API 테스트는 프로젝트 루트에서 다음 명령으로 실행합니다.
 인증은 FastAPI backend가 처리하는 Google/Naver Authorization Code Flow를 사용합니다. `.env.example`을 `.env`로 복사한 뒤, 다음 값을 환경별 Secret으로 설정합니다.
 
 - `SESSION_SECRET`: 환경마다 다른 고엔트로피 문자열
+- `SESSION_COOKIE_SECURE`: local은 `false`, HTTPS 운영 환경은 `true`
 - `APP_ORIGIN`, `API_ORIGIN`
 - `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`
 - `NAVER_OAUTH_CLIENT_ID`, `NAVER_OAUTH_CLIENT_SECRET`
