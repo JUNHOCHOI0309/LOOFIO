@@ -104,9 +104,13 @@ Estimate는 실제 매출이나 보장값이 아니며, `Recommendation`이나 �
 ## Recommendations
 
 ```text
+POST   /api/v1/opportunities/{opportunityId}/recommendations/draft
 GET    /api/v1/opportunities/{opportunityId}/recommendations
 POST   /api/v1/recommendations/{recommendationId}/decisions
 ```
+
+`draft`는 저장된 Opportunity의 Observation·Estimate·limitations만 이용해 재현 가능한 Recommendation 초안을 만들거나 기존 초안을 반환한다. 이 요청 및 `approved` 결정은 외부 채널 실행을 만들지 않는다.
+Recommendation 초안과 결정은 `owner`, `admin`, `marketer` 역할만 생성할 수 있으며 `viewer`는 조회만 할 수 있다.
 
 ## Actions
 
@@ -239,6 +243,8 @@ Opportunity 응답은 최소 다음 의미 계층을 유지한다.
 Expected Effect는 estimate다.
 
 실제 결과는 Action Result/Measurement에서만 반환한다.
+
+현재 LowDemandSlot 초안은 `manual_time_slot_offer_test` / `manual` channel만 제공한다. 대상 고객, 혜택, 예산은 설정하지 않으며, 이를 입력·승인·실행하는 Action endpoint는 아직 구현하지 않는다.
 
 ---
 

@@ -17,6 +17,7 @@ from app.auth.store import PostgresAuthStore
 from app.imports.store import PostgresAppointmentImportStore
 from app.metrics.store import PostgresAppointmentMetricStore
 from app.opportunities.store import PostgresOpportunityStore
+from app.recommendations.store import PostgresRecommendationStore
 
 app = FastAPI(
     title="LOOFIO API",
@@ -27,6 +28,7 @@ app.state.auth_store = PostgresAuthStore(os.getenv("DATABASE_URL"))
 app.state.import_store = PostgresAppointmentImportStore(os.getenv("DATABASE_URL"))
 app.state.metric_store = PostgresAppointmentMetricStore(os.getenv("DATABASE_URL"))
 app.state.opportunity_store = PostgresOpportunityStore(os.getenv("DATABASE_URL"))
+app.state.recommendation_store = PostgresRecommendationStore(os.getenv("DATABASE_URL"))
 
 configured_session_secret = os.getenv("SESSION_SECRET")
 secure_session_cookie = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
