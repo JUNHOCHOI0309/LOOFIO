@@ -9,11 +9,16 @@ from app.imports.appointments import parse_appointments_csv
 from app.imports.store import InMemoryAppointmentImportStore
 from app.main import app
 from app.schemas.auth import AuthenticatedUser
+from app.schemas.imports import AppointmentImportMappingRequest
 
 
 VALID_CSV = (
     "appointment_id,location_key,customer_token,visit_start_at,visit_end_at,booked_at,offering_name,status,listed_price,paid_amount,discount_amount,source,source_record_id\n"
     "apt-1,loc-a,tokenized-customer-001,2026-08-13T10:00:00+09:00,2026-08-13T10:30:00+09:00,2026-08-10T10:00:00+09:00,피코토닝,완료,100000,90000,10000,sample_csv,record-1\n"
+)
+HOSPITAL_SPECIFIC_CSV = (
+    "예약번호,방문일시,진료명,진료상태,환자키,수납금액\n"
+    "apt-hospital-1,2026-08-13T10:00:00+09:00,피코토닝,내원완료,tokenized-customer-002,90000\n"
 )
 
 
@@ -58,6 +63,117 @@ def test_normalizer_drops_unallowlisted_source_columns() -> None:
 
     assert parsed.errors == []
     assert "phone" not in parsed.rows[0].raw_payload
+
+
+def test_inspection_suggests_known_korean_headers_without_mapping_private_columns(monkeypatch) -> None:
+    client, _, _ = _authenticated_client(monkeypatch)
+
+    response = client.post(
+        "/api/v1/businesses/biz-a/imports/appointments/inspect", files=_csv_file(HOSPITAL_SPECIFIC_CSV)
+    )
+
+    assert response.status_code == 200
+    suggestions = response.json()["suggested_column_mapping"]
+    assert suggestions["appointment_id"] == "예약번호"
+    assert suggestions["visit_start_at"] == "방문일시"
+    assert suggestions["offering_name"] == "진료명"
+    assert suggestions["status"] == "진료상태"
+    assert "phone" not in suggestions.values()
+
+
+def test_saved_mapping_normalizes_hospital_specific_csv_and_is_reusable(monkeypatch) -> None:
+    client, _, import_store = _authenticated_client(monkeypatch)
+    mapping_response = client.post(
+        "/api/v1/businesses/biz-a/imports/appointments/mappings",
+        json={
+            "name": "A병원 예약 내보내기",
+            "column_mapping": {
+                "appointment_id": "예약번호",
+                "visit_start_at": "방문일시",
+                "offering_name": "진료명",
+                "status": "진료상태",
+                "customer_token": "환자키",
+                "paid_amount": "수납금액",
+            },
+            "status_mapping": {"내원완료": "completed"},
+        },
+    )
+
+    assert mapping_response.status_code == 201
+    mapping_id = mapping_response.json()["id"]
+    preview = client.post(
+        "/api/v1/businesses/biz-a/imports/appointments/preview",
+        data={"mapping_id": mapping_id}, files=_csv_file(HOSPITAL_SPECIFIC_CSV),
+    )
+    saved = client.post(
+        "/api/v1/businesses/biz-a/imports/appointments",
+        headers={"Idempotency-Key": "hospital-mapping-import"},
+        data={"mapping_id": mapping_id}, files=_csv_file(HOSPITAL_SPECIFIC_CSV),
+    )
+    mappings = client.get("/api/v1/businesses/biz-a/imports/appointments/mappings")
+
+    assert preview.status_code == 200
+    assert preview.json()["preview"][0]["status"] == "completed"
+    assert saved.status_code == 201
+    assert saved.json()["imported_rows"] == 1
+    assert len(mappings.json()) == 1
+    assert import_store.mappings
+
+
+def test_mapping_cannot_be_read_from_another_tenant(monkeypatch) -> None:
+    client, tenant, import_store = _authenticated_client(monkeypatch)
+    mapping = import_store.save_mapping(
+        tenant_id=tenant.tenant_id,
+        business_id="biz-a",
+        request=AppointmentImportMappingRequest(
+            name="Private mapping",
+            column_mapping={
+                "appointment_id": "id", "visit_start_at": "time", "offering_name": "service", "status": "state",
+            },
+        ),
+    )
+    import_store.register_business(tenant_id="other-tenant", business_id="biz-other")
+
+    response = client.post(
+        "/api/v1/businesses/biz-other/imports/appointments/preview",
+        data={"mapping_id": mapping.id}, files=_csv_file(VALID_CSV),
+    )
+
+    assert response.status_code == 404
+
+
+def test_mapping_requires_all_canonical_required_fields(monkeypatch) -> None:
+    client, _, _ = _authenticated_client(monkeypatch)
+
+    response = client.post(
+        "/api/v1/businesses/biz-a/imports/appointments/mappings",
+        json={
+            "name": "Incomplete mapping",
+            "column_mapping": {
+                "appointment_id": "예약번호", "visit_start_at": "방문일시", "offering_name": "진료명", "paid_amount": "수납금액",
+            },
+        },
+    )
+
+    assert response.status_code == 422
+    assert "Missing required columns: status" in response.json()["error"]["message"]
+
+
+def test_mapping_rejects_raw_phone_column_as_customer_token(monkeypatch) -> None:
+    client, _, _ = _authenticated_client(monkeypatch)
+
+    response = client.post(
+        "/api/v1/businesses/biz-a/imports/appointments/mappings",
+        json={
+            "name": "Unsafe mapping",
+            "column_mapping": {
+                "appointment_id": "예약번호", "visit_start_at": "방문일시", "offering_name": "진료명", "status": "진료상태", "customer_token": "전화번호",
+            },
+        },
+    )
+
+    assert response.status_code == 422
+    assert "customer_token cannot map" in response.json()["error"]["message"]
 
 
 def test_import_persists_once_replays_same_key_and_reports_source_duplicates(monkeypatch) -> None:
@@ -114,6 +230,33 @@ def test_import_requires_idempotency_key(monkeypatch) -> None:
 
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_same_idempotency_key_with_a_different_mapping_conflicts(monkeypatch) -> None:
+    client, _, _ = _authenticated_client(monkeypatch)
+    url = "/api/v1/businesses/biz-a/imports/appointments"
+    mapping = client.post(
+        "/api/v1/businesses/biz-a/imports/appointments/mappings",
+        json={
+            "name": "Equivalent headers mapping",
+            "column_mapping": {
+                "appointment_id": "appointment_id", "visit_start_at": "visit_start_at", "offering_name": "offering_name", "status": "status",
+            },
+        },
+    )
+
+    first = client.post(url, headers={"Idempotency-Key": "mapping-sensitive-key"}, files=_csv_file(VALID_CSV))
+    second = client.post(
+        url,
+        headers={"Idempotency-Key": "mapping-sensitive-key"},
+        data={"mapping_id": mapping.json()["id"]},
+        files=_csv_file(VALID_CSV),
+    )
+
+    assert mapping.status_code == 201
+    assert first.status_code == 201
+    assert second.status_code == 409
+    assert second.json()["error"]["code"] == "IDEMPOTENCY_CONFLICT"
 
 
 def test_preview_rejects_non_csv_with_standard_error_contract(monkeypatch) -> None:
