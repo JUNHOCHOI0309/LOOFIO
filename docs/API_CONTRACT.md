@@ -52,14 +52,21 @@ GET    /api/v1/businesses/{businessId}/imports/{importId}
 Appointment CSV의 구현 endpoint는 다음과 같다.
 
 ```text
+POST   /api/v1/businesses/{businessId}/imports/appointments/inspect
 POST   /api/v1/businesses/{businessId}/imports/appointments/preview
 POST   /api/v1/businesses/{businessId}/imports/appointments
 GET    /api/v1/businesses/{businessId}/imports/{importId}
+GET    /api/v1/businesses/{businessId}/imports/appointments/mappings
+POST   /api/v1/businesses/{businessId}/imports/appointments/mappings
 ```
 
 저장 endpoint는 `multipart/form-data`의 `file`과 `Idempotency-Key` 헤더를 요구한다.
-동일 tenant, business, key에 같은 파일을 다시 보내면 기존 import 결과를 반환하고, 다른 파일을 보내면 `IDEMPOTENCY_CONFLICT`를 반환한다.
+동일 tenant, business, key에 같은 파일과 같은 CSV 매핑을 다시 보내면 기존 import 결과를 반환하고, 파일 또는 매핑이 다르면 `IDEMPOTENCY_CONFLICT`를 반환한다.
 유효하지 않은 행이 하나라도 있으면 예약 데이터를 부분 저장하지 않는다.
+
+`inspect`는 CSV 헤더와 결정론적 alias 규칙만 사용해 열 매핑 제안을 반환한다. 제안은 저장되거나 적용되기 전에 사용자가 확인해야 한다.
+매핑은 tenant/business 범위의 이름 있는 프로필로 저장하며, `preview`와 저장 요청의 multipart `mapping_id`로 재사용한다. 매핑은 `appointment_id`, `visit_start_at`, `offering_name`, `status`를 반드시 연결해야 한다.
+평문 전화번호·이메일 등의 예상 밖 개인정보 열은 자동 매핑하거나 원본 이력에 보관하지 않는다.
 
 ## Opportunities
 

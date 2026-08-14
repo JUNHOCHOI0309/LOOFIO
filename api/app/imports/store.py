@@ -8,8 +8,8 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Json
 
-from app.imports.appointments import NormalizedAppointment
-from app.schemas.imports import AppointmentImportResult
+from app.imports.appointments import AppointmentColumnMapping, NormalizedAppointment
+from app.schemas.imports import AppointmentImportMapping, AppointmentImportMappingRequest, AppointmentImportResult
 
 
 class ImportStoreUnavailable(RuntimeError):
@@ -38,9 +38,13 @@ class AppointmentImportStore(Protocol):
         idempotency_key: str,
         raw_csv: bytes,
         rows: list[NormalizedAppointment],
+        mapping_fingerprint: str = "",
     ) -> AppointmentImportResult: ...
 
     def get_import(self, *, tenant_id: str, business_id: str, import_id: str) -> AppointmentImportResult | None: ...
+    def list_mappings(self, *, tenant_id: str, business_id: str) -> list[AppointmentImportMapping]: ...
+    def save_mapping(self, *, tenant_id: str, business_id: str, request: AppointmentImportMappingRequest) -> AppointmentImportMapping: ...
+    def get_mapping(self, *, tenant_id: str, business_id: str, mapping_id: str) -> AppointmentColumnMapping | None: ...
 
 
 class PostgresAppointmentImportStore:
@@ -56,8 +60,9 @@ class PostgresAppointmentImportStore:
         idempotency_key: str,
         raw_csv: bytes,
         rows: list[NormalizedAppointment],
+        mapping_fingerprint: str = "",
     ) -> AppointmentImportResult:
-        content_sha256 = sha256(raw_csv).hexdigest()
+        content_sha256 = sha256(raw_csv + b"\0" + mapping_fingerprint.encode("utf-8")).hexdigest()
         with self._connection() as connection, connection.cursor(row_factory=dict_row) as cursor:
             location_id = self._single_location_id(cursor, tenant_id, business_id)
             cursor.execute(
@@ -68,7 +73,7 @@ class PostgresAppointmentImportStore:
             existing = cursor.fetchone()
             if existing:
                 if existing["content_sha256"] != content_sha256:
-                    raise ImportIdempotencyConflict("동일 Idempotency-Key에는 같은 파일만 사용할 수 있습니다.")
+                    raise ImportIdempotencyConflict("동일 Idempotency-Key에는 같은 파일과 CSV 매핑만 사용할 수 있습니다.")
                 return _result_from_row(existing, business_id=business_id, replayed=True)
 
             cursor.execute(
@@ -128,10 +133,40 @@ class PostgresAppointmentImportStore:
             row = cursor.fetchone()
             return _result_from_row(row, business_id=business_id) if row else None
 
+    def list_mappings(self, *, tenant_id: str, business_id: str) -> list[AppointmentImportMapping]:
+        with self._connection() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            self._assert_business(cursor, tenant_id, business_id)
+            cursor.execute(
+                "SELECT * FROM appointment_import_mappings WHERE tenant_id = %s AND business_id = %s ORDER BY updated_at DESC, created_at DESC",
+                (tenant_id, business_id),
+            )
+            return [_mapping_from_row(row) for row in cursor.fetchall()]
+
+    def save_mapping(self, *, tenant_id: str, business_id: str, request: AppointmentImportMappingRequest) -> AppointmentImportMapping:
+        with self._connection() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            self._assert_business(cursor, tenant_id, business_id)
+            cursor.execute(
+                "INSERT INTO appointment_import_mappings (tenant_id, business_id, name, column_mapping, status_mapping) "
+                "VALUES (%s, %s, %s, %s, %s) "
+                "ON CONFLICT (tenant_id, business_id, name) DO UPDATE SET column_mapping = EXCLUDED.column_mapping, status_mapping = EXCLUDED.status_mapping, updated_at = now() "
+                "RETURNING *",
+                (tenant_id, business_id, request.name.strip(), Json(request.column_mapping), Json(request.status_mapping)),
+            )
+            return _mapping_from_row(cursor.fetchone())
+
+    def get_mapping(self, *, tenant_id: str, business_id: str, mapping_id: str) -> AppointmentColumnMapping | None:
+        with self._connection() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            self._assert_business(cursor, tenant_id, business_id)
+            cursor.execute(
+                "SELECT column_mapping, status_mapping FROM appointment_import_mappings "
+                "WHERE id = %s AND tenant_id = %s AND business_id = %s",
+                (mapping_id, tenant_id, business_id),
+            )
+            row = cursor.fetchone()
+            return AppointmentColumnMapping(**row) if row else None
+
     def _single_location_id(self, cursor, tenant_id: str, business_id: str) -> str:
-        cursor.execute("SELECT id FROM businesses WHERE id = %s AND tenant_id = %s", (business_id, tenant_id))
-        if not cursor.fetchone():
-            raise BusinessNotFoundForTenant("해당 병원에 접근할 수 없습니다.")
+        self._assert_business(cursor, tenant_id, business_id)
         cursor.execute(
             "SELECT id FROM locations WHERE tenant_id = %s AND business_id = %s ORDER BY created_at ASC",
             (tenant_id, business_id),
@@ -140,6 +175,11 @@ class PostgresAppointmentImportStore:
         if len(locations) != 1:
             raise MultipleLocationsRequireMapping("여러 지점에는 외부 location_key 매핑이 필요합니다.")
         return str(locations[0]["id"])
+
+    def _assert_business(self, cursor, tenant_id: str, business_id: str) -> None:
+        cursor.execute("SELECT 1 FROM businesses WHERE id = %s AND tenant_id = %s", (business_id, tenant_id))
+        if not cursor.fetchone():
+            raise BusinessNotFoundForTenant("해당 병원에 접근할 수 없습니다.")
 
     def _upsert_customer(self, cursor, tenant_id: str, business_id: str, row: NormalizedAppointment) -> str | None:
         if not row.customer_token:
@@ -186,11 +226,13 @@ class InMemoryAppointmentImportStore:
     business_locations: dict[tuple[str, str], list[str]]
     imports: dict[tuple[str, str, str], tuple[str, str, AppointmentImportResult]]
     source_records: set[tuple[str, str, str, str]]
+    mappings: dict[tuple[str, str, str], AppointmentImportMapping]
 
     def __init__(self) -> None:
         self.business_locations = {}
         self.imports = {}
         self.source_records = set()
+        self.mappings = {}
 
     def register_business(self, *, tenant_id: str, business_id: str, location_id: str = "location-1") -> None:
         self.business_locations[(tenant_id, business_id)] = [location_id]
@@ -204,6 +246,7 @@ class InMemoryAppointmentImportStore:
         idempotency_key: str,
         raw_csv: bytes,
         rows: list[NormalizedAppointment],
+        mapping_fingerprint: str = "",
     ) -> AppointmentImportResult:
         locations = self.business_locations.get((tenant_id, business_id))
         if not locations:
@@ -211,12 +254,12 @@ class InMemoryAppointmentImportStore:
         if len(locations) != 1:
             raise MultipleLocationsRequireMapping("여러 지점에는 외부 location_key 매핑이 필요합니다.")
         key = (tenant_id, business_id, idempotency_key)
-        content_sha256 = sha256(raw_csv).hexdigest()
+        content_sha256 = sha256(raw_csv + b"\0" + mapping_fingerprint.encode("utf-8")).hexdigest()
         existing = self.imports.get(key)
         if existing:
             _, existing_hash, result = existing
             if existing_hash != content_sha256:
-                raise ImportIdempotencyConflict("동일 Idempotency-Key에는 같은 파일만 사용할 수 있습니다.")
+                raise ImportIdempotencyConflict("동일 Idempotency-Key에는 같은 파일과 CSV 매핑만 사용할 수 있습니다.")
             return result.model_copy(update={"replayed": True})
         imported_rows = 0
         duplicate_rows = 0
@@ -242,6 +285,34 @@ class InMemoryAppointmentImportStore:
                 return result
         return None
 
+    def list_mappings(self, *, tenant_id: str, business_id: str) -> list[AppointmentImportMapping]:
+        if (tenant_id, business_id) not in self.business_locations:
+            raise BusinessNotFoundForTenant("해당 병원에 접근할 수 없습니다.")
+        return [
+            mapping for (item_tenant, item_business, _), mapping in self.mappings.items()
+            if item_tenant == tenant_id and item_business == business_id
+        ]
+
+    def save_mapping(self, *, tenant_id: str, business_id: str, request: AppointmentImportMappingRequest) -> AppointmentImportMapping:
+        if (tenant_id, business_id) not in self.business_locations:
+            raise BusinessNotFoundForTenant("해당 병원에 접근할 수 없습니다.")
+        key = (tenant_id, business_id, request.name.strip())
+        existing = self.mappings.get(key)
+        now = datetime.now(timezone.utc)
+        mapping = AppointmentImportMapping(
+            id=existing.id if existing else str(uuid4()), business_id=business_id, name=request.name.strip(),
+            column_mapping=request.column_mapping, status_mapping=request.status_mapping,
+            created_at=existing.created_at if existing else now, updated_at=now,
+        )
+        self.mappings[key] = mapping
+        return mapping
+
+    def get_mapping(self, *, tenant_id: str, business_id: str, mapping_id: str) -> AppointmentColumnMapping | None:
+        for mapping in self.list_mappings(tenant_id=tenant_id, business_id=business_id):
+            if mapping.id == mapping_id:
+                return AppointmentColumnMapping(column_mapping=mapping.column_mapping, status_mapping=mapping.status_mapping)
+        return None
+
 
 def _result_from_row(row: dict, *, business_id: str, replayed: bool = False) -> AppointmentImportResult:
     return AppointmentImportResult(
@@ -253,4 +324,12 @@ def _result_from_row(row: dict, *, business_id: str, replayed: bool = False) -> 
         invalid_rows=row["invalid_rows"],
         status=row["status"],
         replayed=replayed,
+    )
+
+
+def _mapping_from_row(row: dict) -> AppointmentImportMapping:
+    return AppointmentImportMapping(
+        id=str(row["id"]), business_id=str(row["business_id"]), name=row["name"],
+        column_mapping=row["column_mapping"], status_mapping=row["status_mapping"],
+        created_at=row["created_at"], updated_at=row["updated_at"],
     )
