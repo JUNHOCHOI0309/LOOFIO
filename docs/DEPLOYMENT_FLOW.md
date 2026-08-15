@@ -2,9 +2,16 @@
 
 ## 1. 상태
 
-현재 LOOFIO의 실제 클라우드, CI/CD 제품, 컨테이너 플랫폼은 확정되지 않았다.
+현재 LOOFIO의 실제 클라우드와 컨테이너 플랫폼은 확정되지 않았다. 회귀 검증 CI는 GitHub Actions를 사용한다.
 
-따라서 이 문서는 **공급자 독립적인 배포 계약**을 정의한다.
+따라서 이 문서는 **공급자 독립적인 배포 계약**을 정의하며, CI의 최소 구현 범위만 명시한다.
+
+현재 `.github/workflows/regression.yml`은 `main`, `feature/**`, `fix/**`, `test/**`, `ci/**` push와 수동 실행에서 다음을 수행한다.
+
+- Python 3.12에서 전체 backend test와 sample-pack 제품 루프 회귀 테스트
+- Node.js 22에서 web typecheck와 production build
+
+이 workflow는 배포·migration·secret 접근을 수행하지 않는다. Staging/Production 배포 방식은 별도 결정이 필요하다.
 
 ---
 

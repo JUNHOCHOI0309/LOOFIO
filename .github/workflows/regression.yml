@@ -1,0 +1,53 @@
+name: Regression checks
+
+on:
+  push:
+    branches:
+      - main
+      - feature/**
+      - fix/**
+      - test/**
+      - ci/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: regression-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend regression
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            api/requirements.txt
+            api/requirements-dev.txt
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r api/requirements-dev.txt
+      - name: Run backend and sample-pack regressions
+        run: python -m pytest -q
+
+  web:
+    name: Web typecheck and build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install Node dependencies
+        run: npm ci
+      - name: Run web typecheck
+        run: npm run lint:web
+      - name: Build web application
+        run: npm run build:web
