@@ -14,6 +14,7 @@ class AppointmentMetricRow:
     visit_start_at: datetime
     status: str
     paid_amount: Decimal | None
+    offering_name: str | None = None
 
 
 def calculate_appointment_metrics(rows: list[AppointmentMetricRow]) -> AppointmentMetrics:

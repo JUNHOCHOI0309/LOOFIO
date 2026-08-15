@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from itsdangerous import TimestampSigner
 
 from app.analytics.detectors.low_demand_slots import detect_low_demand_slots
+from app.analytics.detectors.cancellation_hotspots import detect_cancellation_hotspots
 from app.analytics.detectors.revenue_gap import detect_revenue_gaps
 from app.auth.store import InMemoryAuthStore
 from app.main import app
@@ -56,6 +57,39 @@ def test_revenue_gap_omits_estimate_when_payment_sample_is_insufficient() -> Non
     assert "결제 표본" in result.limitations[-1]
 
 
+def test_cancellation_hotspot_detects_high_disruption_offering_time_slot() -> None:
+    result = detect_cancellation_hotspots(_cancellation_hotspot_rows())
+
+    candidate = next(item for item in result.candidates if item.weekday == "FRIDAY" and item.slot_start_hour == 18)
+    assert result.detector_version == "cancellation-hotspot-v1"
+    assert candidate.offering_name == "검사"
+    assert candidate.appointment_count == 15
+    assert candidate.cancelled_count == 6
+    assert candidate.no_show_count == 3
+    assert candidate.disruption_rate == 0.6
+    assert candidate.baseline_disruption_rate == 0.15
+    assert candidate.rate_multiple == 4.0
+
+
+def test_cancellation_hotspot_requires_fifteen_grouped_appointments() -> None:
+    result = detect_cancellation_hotspots(_cancellation_hotspot_rows()[:-4])
+
+    assert result.candidates == []
+
+
+def test_cancellation_hotspot_api_scopes_to_active_tenant(monkeypatch) -> None:
+    client, tenant_id, metric_store = _authenticated_client(monkeypatch)
+    metric_store.register_rows(tenant_id=tenant_id, business_id="biz-a", rows=_cancellation_hotspot_rows())
+    metric_store.register_rows(tenant_id="other-tenant", business_id="biz-other", rows=_cancellation_hotspot_rows())
+
+    own = client.get("/api/v1/businesses/biz-a/detectors/cancellation-hotspots")
+    other = client.get("/api/v1/businesses/biz-other/detectors/cancellation-hotspots")
+
+    assert own.status_code == 200
+    assert own.json()["candidates"]
+    assert other.status_code == 404
+
+
 def test_low_demand_slot_api_scopes_to_active_tenant(monkeypatch) -> None:
     client, tenant_id, metric_store = _authenticated_client(monkeypatch)
     metric_store.register_rows(tenant_id=tenant_id, business_id="biz-a", rows=_twelve_week_demand_rows())
@@ -101,6 +135,17 @@ def _revenue_gap_rows() -> list[AppointmentMetricRow]:
         rows.append(AppointmentMetricRow(visit_start_at=day.replace(hour=10), status="completed", paid_amount=Decimal("10000")))
         rows.extend(AppointmentMetricRow(visit_start_at=day.replace(hour=14), status="completed", paid_amount=Decimal("50000")) for _ in range(4))
         rows.extend(AppointmentMetricRow(visit_start_at=day.replace(hour=16), status="completed", paid_amount=Decimal("50000")) for _ in range(3))
+    return rows
+
+
+def _cancellation_hotspot_rows() -> list[AppointmentMetricRow]:
+    rows: list[AppointmentMetricRow] = []
+    first_friday = datetime.fromisoformat("2026-05-08T00:00:00+09:00")
+    for week in range(15):
+        status = "cancelled" if week < 6 else "no_show" if week < 9 else "completed"
+        rows.append(AppointmentMetricRow(visit_start_at=(first_friday + timedelta(weeks=week)).replace(hour=18), status=status, paid_amount=None, offering_name="검사"))
+        rows.extend(AppointmentMetricRow(visit_start_at=(first_friday + timedelta(weeks=week)).replace(hour=10), status="completed", paid_amount=None, offering_name="일반 진료") for _ in range(2))
+        rows.append(AppointmentMetricRow(visit_start_at=(first_friday + timedelta(weeks=week)).replace(hour=14), status="completed", paid_amount=None, offering_name="치료"))
     return rows
 
 
