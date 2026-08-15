@@ -1,11 +1,13 @@
 import base64
 import json
 from datetime import datetime, timedelta
+from decimal import Decimal
 
 from fastapi.testclient import TestClient
 from itsdangerous import TimestampSigner
 
 from app.analytics.detectors.low_demand_slots import detect_low_demand_slots
+from app.analytics.detectors.revenue_gap import detect_revenue_gaps
 from app.auth.store import InMemoryAuthStore
 from app.main import app
 from app.metrics.appointments import AppointmentMetricRow
@@ -34,6 +36,26 @@ def test_low_demand_slot_detector_requires_eight_weeks() -> None:
     assert "최소 8주" in result.limitations[0]
 
 
+def test_revenue_gap_uses_same_weekday_reference_payment_samples() -> None:
+    result = detect_revenue_gaps(_revenue_gap_rows())
+
+    candidate = next(item for item in result.candidates if item.weekday == "MONDAY" and item.slot_start_hour == 10)
+    assert result.detector_version == "revenue-gap-benchmark-v1"
+    assert candidate.weekly_booking_gap == 2.5
+    assert candidate.completed_payment_sample_count == 48
+    assert candidate.average_reference_paid_amount.amount == "50000.00"
+    assert candidate.monthly_value_low.amount == "271562.50"
+    assert candidate.monthly_value_high.amount == "543125.00"
+    assert "인과효과가 아닙니다" in result.limitations[4]
+
+
+def test_revenue_gap_omits_estimate_when_payment_sample_is_insufficient() -> None:
+    result = detect_revenue_gaps(_twelve_week_demand_rows())
+
+    assert result.candidates == []
+    assert "결제 표본" in result.limitations[-1]
+
+
 def test_low_demand_slot_api_scopes_to_active_tenant(monkeypatch) -> None:
     client, tenant_id, metric_store = _authenticated_client(monkeypatch)
     metric_store.register_rows(tenant_id=tenant_id, business_id="biz-a", rows=_twelve_week_demand_rows())
@@ -41,6 +63,19 @@ def test_low_demand_slot_api_scopes_to_active_tenant(monkeypatch) -> None:
 
     own = client.get("/api/v1/businesses/biz-a/detectors/low-demand-slots")
     other = client.get("/api/v1/businesses/biz-other/detectors/low-demand-slots")
+
+    assert own.status_code == 200
+    assert own.json()["candidates"]
+    assert other.status_code == 404
+
+
+def test_revenue_gap_api_scopes_to_active_tenant(monkeypatch) -> None:
+    client, tenant_id, metric_store = _authenticated_client(monkeypatch)
+    metric_store.register_rows(tenant_id=tenant_id, business_id="biz-a", rows=_revenue_gap_rows())
+    metric_store.register_rows(tenant_id="other-tenant", business_id="biz-other", rows=_revenue_gap_rows())
+
+    own = client.get("/api/v1/businesses/biz-a/detectors/revenue-gaps")
+    other = client.get("/api/v1/businesses/biz-other/detectors/revenue-gaps")
 
     assert own.status_code == 200
     assert own.json()["candidates"]
@@ -55,6 +90,17 @@ def _twelve_week_demand_rows() -> list[AppointmentMetricRow]:
         rows.append(AppointmentMetricRow(visit_start_at=day.replace(hour=10), status="completed", paid_amount=None))
         rows.extend(AppointmentMetricRow(visit_start_at=day.replace(hour=14), status="completed", paid_amount=None) for _ in range(4))
         rows.extend(AppointmentMetricRow(visit_start_at=day.replace(hour=16), status="completed", paid_amount=None) for _ in range(3))
+    return rows
+
+
+def _revenue_gap_rows() -> list[AppointmentMetricRow]:
+    rows: list[AppointmentMetricRow] = []
+    first_monday = datetime.fromisoformat("2026-05-04T00:00:00+09:00")
+    for week in range(12):
+        day = first_monday + timedelta(weeks=week)
+        rows.append(AppointmentMetricRow(visit_start_at=day.replace(hour=10), status="completed", paid_amount=Decimal("10000")))
+        rows.extend(AppointmentMetricRow(visit_start_at=day.replace(hour=14), status="completed", paid_amount=Decimal("50000")) for _ in range(4))
+        rows.extend(AppointmentMetricRow(visit_start_at=day.replace(hour=16), status="completed", paid_amount=Decimal("50000")) for _ in range(3))
     return rows
 
 

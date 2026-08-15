@@ -93,10 +93,13 @@ GET    /api/v1/businesses/{businessId}/metrics/appointments
 
 ```text
 GET    /api/v1/businesses/{businessId}/detectors/low-demand-slots
+GET    /api/v1/businesses/{businessId}/detectors/revenue-gaps
 ```
 
 LowDemandSlot은 같은 요일의 관측된 2시간 슬롯과 비교해 상대 예약 수요가 낮은 후보를 반환한다.
 최소 8주 관측과 `DemandIndex <= 0.65`가 필요하다. 반환값은 Observation 후보이며 Opportunity, 예상 매출, Recommendation을 의미하지 않는다.
+
+RevenueGap은 LowDemandSlot 후보의 주간 예약 격차를 같은 요일 비교 시간대의 완료 결제금액 표본으로 환산한다. 완료 결제 표본이 최소 5건인 경우에만 50~100% 회복 시나리오의 월간 범위를 반환한다. 이 값은 Estimate이며 실제 손실·보장 매출·인과효과·ROI가 아니다. capacity 데이터가 없으므로 Capacity Gap을 계산하지 않는다.
 
 ## Opportunities
 
