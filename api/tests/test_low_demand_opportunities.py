@@ -13,6 +13,7 @@ from app.metrics.appointments import AppointmentMetricRow
 from app.metrics.store import InMemoryAppointmentMetricStore
 from app.imports.appointments import parse_appointments_csv
 from app.opportunities.low_demand import build_low_demand_opportunity_drafts
+from app.opportunities.other_detectors import build_other_detector_opportunity_drafts
 from app.opportunities.store import InMemoryOpportunityStore
 from app.schemas.auth import AuthenticatedUser
 
@@ -81,6 +82,18 @@ def test_refresh_cannot_read_another_tenants_business(monkeypatch) -> None:
     assert response.status_code == 404
 
 
+def test_other_detector_opportunities_are_versioned_and_token_safe() -> None:
+    rows = _fixture_metric_rows("hospital_operational_mix_v1.csv")
+
+    drafts = build_other_detector_opportunity_drafts(rows, as_of_date=datetime.fromisoformat("2026-08-15T00:00:00+09:00").date())
+
+    assert {draft.opportunity_type for draft in drafts} >= {"CANCELLATION_HOTSPOT", "SERVICE_DEMAND_GAP", "DORMANT_CUSTOMER"}
+    dormant = next(draft for draft in drafts if draft.opportunity_type == "DORMANT_CUSTOMER")
+    assert "customer_token" not in dormant.segment
+    assert "customer-token" not in dormant.natural_key
+    assert dormant.observation.customer_reference is not None
+
+
 def _twelve_week_demand_rows(*, with_payments: bool) -> list[AppointmentMetricRow]:
     rows: list[AppointmentMetricRow] = []
     first_monday = datetime.fromisoformat("2026-05-04T00:00:00+09:00")
@@ -97,7 +110,7 @@ def _fixture_metric_rows(filename: str) -> list[AppointmentMetricRow]:
     root = Path(__file__).resolve().parents[2]
     parsed = parse_appointments_csv((root / "sample-data" / "appointments" / filename).read_bytes())
     assert not parsed.errors
-    return [AppointmentMetricRow(visit_start_at=row.visit_start_at, status=row.status, paid_amount=row.paid_amount) for row in parsed.rows]
+    return [AppointmentMetricRow(visit_start_at=row.visit_start_at, status=row.status, paid_amount=row.paid_amount, offering_name=row.offering_name, customer_token=row.customer_token) for row in parsed.rows]
 
 
 def _authenticated_client(monkeypatch):
