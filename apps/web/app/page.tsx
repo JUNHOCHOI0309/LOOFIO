@@ -21,7 +21,38 @@ type DormantCustomerCandidate = { customer_token: string; latest_offering_name: 
 type DormantCustomerDetection = { as_of_date: string; candidates: DormantCustomerCandidate[]; limitations: string[]; };
 type ServiceDemandGapCandidate = { offering_name: string; weekday: string; slot_start_hour: number; offering_appointment_count: number; slot_appointment_count: number; slot_offering_appointment_count: number; business_offering_share: number; slot_offering_share: number; expected_slot_offering_appointment_count: number; share_index: number; };
 type ServiceDemandGapDetection = { candidates: ServiceDemandGapCandidate[]; limitations: string[]; };
-type Opportunity = { id: string; estimate: { value_low: Money; value_high: Money; } | null; detector: { version: string; }; };
+type OpportunityObservation = {
+  kind: string;
+  observed_weeks?: number | null;
+  average_appointments_per_week?: number | null;
+  comparison_median_per_week?: number | null;
+  demand_index?: number | null;
+  appointment_count?: number | null;
+  disruption_rate?: number | null;
+  rate_multiple?: number | null;
+  customer_reference?: string | null;
+  days_since_last_completed_visit?: number | null;
+  expected_revisit_days?: number | null;
+  overdue_ratio?: number | null;
+  offering_appointment_count?: number | null;
+  slot_appointment_count?: number | null;
+  slot_offering_appointment_count?: number | null;
+  business_offering_share?: number | null;
+  slot_offering_share?: number | null;
+  share_index?: number | null;
+};
+type Opportunity = {
+  id: string;
+  type: "LOW_DEMAND_SLOT" | "CANCELLATION_HOTSPOT" | "DORMANT_CUSTOMER" | "SERVICE_DEMAND_GAP";
+  status: string;
+  segment: Record<string, string | number>;
+  observation: OpportunityObservation;
+  estimate: { value_low: Money; value_high: Money; assumptions: string[]; } | null;
+  score: number;
+  confidence: number;
+  limitations: string[];
+  detector: { code: string; version: string; };
+};
 type Recommendation = { id: string; status: "draft" | "approved" | "rejected" | "modified" | "later"; hypothesis: string; explanation: string; limitations: string[]; };
 type Action = { id: string; status: "planned" | "in_progress" | "completed" | "cancelled"; title: string; planned_start_at: string; planned_budget: Money | null; };
 type ActionResultData = { id: string; execution_summary: string; measurement_start_at: string; measurement_end_at: string; actual_spend: Money | null; outcome_notes: string | null; };
@@ -30,6 +61,26 @@ type Measurement = { observed: { appointment_count: number; completed_count: num
 const weekdayLabel: Record<string, string> = { MONDAY: "월", TUESDAY: "화", WEDNESDAY: "수", THURSDAY: "목", FRIDAY: "금", SATURDAY: "토", SUNDAY: "일" };
 const money = (value: Money | null) => value ? new Intl.NumberFormat("ko-KR", { style: "currency", currency: value.currency, maximumFractionDigits: 0 }).format(Number(value.amount)) : "—";
 const maskedCustomerToken = (value: string) => `${value.slice(0, 8)}…${value.slice(-4)}`;
+const opportunityTypeLabel: Record<Opportunity["type"], string> = {
+  LOW_DEMAND_SLOT: "수요 저하 · RevenueGap",
+  CANCELLATION_HOTSPOT: "취소·노쇼 Hotspot",
+  DORMANT_CUSTOMER: "재방문 지연",
+  SERVICE_DEMAND_GAP: "Offering 수요 패턴",
+};
+const opportunitySlotLabel = (opportunity: Opportunity) => {
+  const weekday = typeof opportunity.segment.weekday === "string" ? weekdayLabel[opportunity.segment.weekday] : null;
+  const hour = typeof opportunity.segment.slot_start_hour === "number" ? opportunity.segment.slot_start_hour : null;
+  return weekday && hour !== null ? `${weekday}요일 ${hour.toString().padStart(2, "0")}:00–${(hour + 2).toString().padStart(2, "0")}:00` : null;
+};
+const opportunitySummary = (opportunity: Opportunity) => {
+  const observation = opportunity.observation;
+  const slot = opportunitySlotLabel(opportunity);
+  if (opportunity.type === "LOW_DEMAND_SLOT") return `${slot ?? "시간대"} · Demand Index ${observation.demand_index?.toFixed(2) ?? "—"}`;
+  if (opportunity.type === "CANCELLATION_HOTSPOT") return `${slot ?? "시간대"} · 예약 이탈률 ${observation.disruption_rate !== undefined && observation.disruption_rate !== null ? `${(observation.disruption_rate * 100).toFixed(1)}%` : "—"}`;
+  if (opportunity.type === "DORMANT_CUSTOMER") return `가명 고객 ${observation.customer_reference ?? "—"} · 마지막 완료 방문 후 ${observation.days_since_last_completed_visit ?? "—"}일`;
+  return `${String(opportunity.segment.offering_name ?? "Offering")} · ${slot ?? "시간대"} · 비중 지수 ${observation.share_index?.toFixed(2) ?? "—"}`;
+};
+const supportsRecommendation = (opportunity: Opportunity | null) => opportunity?.type === "LOW_DEMAND_SLOT" && opportunity.detector.version === "low-demand-revenue-gap-v2";
 
 export default function Home() {
   const [business, setBusiness] = useState<Business | null>(null);
@@ -39,6 +90,7 @@ export default function Home() {
   const [cancellationHotspot, setCancellationHotspot] = useState<CancellationHotspotDetection | null>(null);
   const [dormantCustomers, setDormantCustomers] = useState<DormantCustomerDetection | null>(null);
   const [serviceDemandGaps, setServiceDemandGaps] = useState<ServiceDemandGapDetection | null>(null);
+  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [opportunity, setOpportunity] = useState<Opportunity | null>(null);
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
   const [action, setAction] = useState<Action | null>(null);
@@ -92,24 +144,10 @@ export default function Home() {
         if (serviceDemandGapResponse.ok) setServiceDemandGaps(await serviceDemandGapResponse.json() as ServiceDemandGapDetection);
         const opportunitiesResponse = await fetch(`${apiBaseUrl}/businesses/${currentBusiness.business_id}/opportunities`, { credentials: "include" });
         if (opportunitiesResponse.ok) {
-          const opportunities = await opportunitiesResponse.json() as Opportunity[];
-          const currentOpportunity = opportunities.find((item) => item.detector.version === "low-demand-revenue-gap-v2") ?? opportunities[0] ?? null;
-          setOpportunity(currentOpportunity);
-          if (currentOpportunity) {
-            const recommendationsResponse = await fetch(`${apiBaseUrl}/opportunities/${currentOpportunity.id}/recommendations`, { credentials: "include" });
-            if (recommendationsResponse.ok) {
-              const currentRecommendation = (await recommendationsResponse.json() as Recommendation[])[0] ?? null;
-              setRecommendation(currentRecommendation);
-              if (currentRecommendation) {
-                const actionsResponse = await fetch(`${apiBaseUrl}/recommendations/${currentRecommendation.id}/actions`, { credentials: "include" });
-                if (actionsResponse.ok) {
-                  const currentAction = (await actionsResponse.json() as Action[])[0] ?? null;
-                  setAction(currentAction);
-                  if (currentAction?.status === "completed") await loadActionResult(currentAction.id);
-                }
-              }
-            }
-          }
+          const storedOpportunities = await opportunitiesResponse.json() as Opportunity[];
+          setOpportunities(storedOpportunities);
+          const currentOpportunity = storedOpportunities.find((item) => item.detector.version === "low-demand-revenue-gap-v2") ?? storedOpportunities[0] ?? null;
+          if (currentOpportunity) await selectOpportunity(currentOpportunity);
         }
         setMessage("");
       } catch { setMessage("API에 연결할 수 없습니다. 백엔드 서버가 실행 중인지 확인해 주세요."); }
@@ -123,6 +161,28 @@ export default function Home() {
     setActionResult(await resultResponse.json() as ActionResultData);
     const measurementResponse = await fetch(`${apiBaseUrl}/actions/${actionId}/measurements`, { credentials: "include" });
     if (measurementResponse.ok) setMeasurement(await measurementResponse.json() as Measurement);
+  }
+
+  async function selectOpportunity(selected: Opportunity) {
+    setOpportunity(selected);
+    setRecommendation(null);
+    setAction(null);
+    setActionResult(null);
+    setMeasurement(null);
+    setRecommendationMessage("");
+    setActionMessage("");
+    setResultMessage("");
+    if (!supportsRecommendation(selected)) return;
+    const recommendationsResponse = await fetch(`${apiBaseUrl}/opportunities/${selected.id}/recommendations`, { credentials: "include" });
+    if (!recommendationsResponse.ok) return;
+    const currentRecommendation = (await recommendationsResponse.json() as Recommendation[])[0] ?? null;
+    setRecommendation(currentRecommendation);
+    if (!currentRecommendation) return;
+    const actionsResponse = await fetch(`${apiBaseUrl}/recommendations/${currentRecommendation.id}/actions`, { credentials: "include" });
+    if (!actionsResponse.ok) return;
+    const currentAction = (await actionsResponse.json() as Action[])[0] ?? null;
+    setAction(currentAction);
+    if (currentAction?.status === "completed") await loadActionResult(currentAction.id);
   }
 
   async function createRecommendationDraft() {
@@ -213,7 +273,8 @@ export default function Home() {
         <article className="opportunity-card cancellation-hotspot-card"><div className="card-title"><div><h2>취소·노쇼 Hotspot</h2><p>요일·2시간 슬롯·Offering별 예약 이탈을 관찰합니다.</p></div></div>{topCancellationHotspot ? <div className="action-priority"><span>Observation</span><strong>{weekdayLabel[topCancellationHotspot.weekday]}요일 {topCancellationHotspot.slot_start_hour.toString().padStart(2, "0")}:00–{(topCancellationHotspot.slot_start_hour + 2).toString().padStart(2, "0")}:00 · {topCancellationHotspot.offering_name}</strong><p>예약 {topCancellationHotspot.appointment_count}건 · 취소 {topCancellationHotspot.cancelled_count}건 · 노쇼 {topCancellationHotspot.no_show_count}건</p><p><b>예약 이탈률 {(topCancellationHotspot.disruption_rate * 100).toFixed(1)}%</b> · 전체 {(topCancellationHotspot.baseline_disruption_rate * 100).toFixed(1)}%의 {topCancellationHotspot.rate_multiple.toFixed(1)}배</p></div> : <div className="action-priority"><span>관측 부족 또는 후보 없음</span><strong>비정상적으로 높은 예약 이탈 구간을 확정하지 않았습니다.</strong><p>{cancellationHotspot?.limitations[1] ?? "Detector 결과를 불러오는 중입니다."}</p></div>}<p className="safety">✓ 취소·노쇼 패턴은 Observation이며, 원인·매출 손실·Recommendation이 아닙니다.</p></article>
         <article className="opportunity-card dormant-customer-card"><div className="card-title"><div><h2>재방문 지연 후보</h2><p>가명 고객 토큰의 완료 방문 간격을 기준으로 관찰합니다.</p></div></div>{topDormantCustomer ? <div className="action-priority"><span>Observation · {dormantCustomers?.as_of_date} 기준</span><strong>{maskedCustomerToken(topDormantCustomer.customer_token)} · {topDormantCustomer.latest_offering_name ?? "Offering 미지정"}</strong><p>마지막 완료 방문 {topDormantCustomer.last_completed_visit_date} · 경과 {topDormantCustomer.days_since_last_completed_visit}일</p><p><b>기대 재방문 {topDormantCustomer.expected_revisit_days.toFixed(1)}일</b> · 지연 비율 {topDormantCustomer.overdue_ratio.toFixed(1)}배 · 기준 {topDormantCustomer.baseline_source}</p></div> : <div className="action-priority"><span>관측 부족 또는 후보 없음</span><strong>재방문 지연 후보를 확정하지 않았습니다.</strong><p>{dormantCustomers?.limitations[1] ?? "Detector 결과를 불러오는 중입니다."}</p></div>}<p className="safety">✓ 이는 이탈 판정이나 고객 메시지 제안이 아닌, 재방문 간격 기반 Observation입니다.</p></article>
         <article className="opportunity-card service-demand-gap-card"><div className="card-title"><div><h2>Offering 수요 패턴</h2><p>Offering의 전체 예약 비중과 요일·시간대 비중을 비교합니다.</p></div></div>{topServiceDemandGap ? <div className="action-priority"><span>Observation</span><strong>{topServiceDemandGap.offering_name} · {weekdayLabel[topServiceDemandGap.weekday]}요일 {topServiceDemandGap.slot_start_hour.toString().padStart(2, "0")}:00–{(topServiceDemandGap.slot_start_hour + 2).toString().padStart(2, "0")}:00</strong><p>해당 슬롯 예약 {topServiceDemandGap.slot_appointment_count}건 중 {topServiceDemandGap.offering_name} {topServiceDemandGap.slot_offering_appointment_count}건</p><p><b>슬롯 비중 {(topServiceDemandGap.slot_offering_share * 100).toFixed(1)}%</b> · 전체 비중 {(topServiceDemandGap.business_offering_share * 100).toFixed(1)}%의 {topServiceDemandGap.share_index.toFixed(2)}배</p></div> : <div className="action-priority"><span>관측 부족 또는 후보 없음</span><strong>상대 수요 저하 Offering 구간을 확정하지 않았습니다.</strong><p>{serviceDemandGaps?.limitations[1] ?? "Detector 결과를 불러오는 중입니다."}</p></div>}<p className="safety">✓ 상대 예약 비중의 Observation이며, 빈 슬롯·매출 기회·할인 효과를 뜻하지 않습니다.</p></article>
-        {opportunity && <article className="opportunity-card recommendation-card"><div className="card-title"><div><h2>Recommendation · 사용자 결정</h2><p>Observation과 Estimate를 바꾸지 않는 검토용 실행 가설입니다.</p></div></div>{recommendation ? <div className="recommendation-body"><span>상태 · {recommendation.status}</span><strong>{recommendation.hypothesis}</strong><p>{recommendation.explanation}</p><ul className="limitations">{recommendation.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}</ul><label>수정 메모 <input value={manualNotes} onChange={(event) => setManualNotes(event.target.value)} maxLength={500} placeholder="수동 검토 시 조정할 내용을 기록하세요" /></label><div className="recommendation-actions"><button className="primary" onClick={() => recordDecision("approved")}>승인 기록</button><button className="ghost" onClick={() => recordDecision("modified")}>수정 기록</button><button className="ghost" onClick={() => recordDecision("later")}>나중에</button><button className="ghost" onClick={() => recordDecision("rejected")}>거절</button></div></div> : <div className="recommendation-body"><p>이 Opportunity의 Observation·Estimate·한계를 바꾸지 않는 수동 실험 초안을 만들 수 있습니다.</p><button className="primary" onClick={createRecommendationDraft}>추천 초안 만들기</button></div>}{recommendationMessage && <p className="recommendation-message">{recommendationMessage}</p>}</article>}
+        {opportunities.length > 0 && <article className="opportunity-card opportunity-list-card"><div className="card-title"><div><h2>저장된 Opportunity</h2><p>Detector가 생성·갱신한 후보입니다. Observation과 Estimate, Recommendation을 구분해 표시합니다.</p></div><span className="opportunity-count">{opportunities.length}개</span></div><div className="opportunity-list">{opportunities.map((item) => <button className={item.id === opportunity?.id ? "selected" : ""} key={item.id} onClick={() => void selectOpportunity(item)}><div><span>{opportunityTypeLabel[item.type]}</span><strong>{opportunitySummary(item)}</strong><small>{item.detector.version} · 신뢰도 {(item.confidence * 100).toFixed(0)}%</small></div><div className="opportunity-list-estimate">{item.estimate ? <><b>Estimate</b><strong>{money(item.estimate.value_low)}–{money(item.estimate.value_high)}</strong></> : <><b>Observation</b><strong>추정 없음</strong></>}</div></button>)}</div><p className="safety">✓ Observation 전용 Opportunity는 원인·매출 손실·외부 실행을 뜻하지 않으며, 현재 Recommendation을 만들지 않습니다.</p></article>}
+        {opportunity && <article className="opportunity-card recommendation-card"><div className="card-title"><div><h2>Recommendation · 사용자 결정</h2><p>Observation과 Estimate를 바꾸지 않는 검토용 실행 가설입니다.</p></div></div>{supportsRecommendation(opportunity) ? <>{recommendation ? <div className="recommendation-body"><span>상태 · {recommendation.status}</span><strong>{recommendation.hypothesis}</strong><p>{recommendation.explanation}</p><ul className="limitations">{recommendation.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}</ul><label>수정 메모 <input value={manualNotes} onChange={(event) => setManualNotes(event.target.value)} maxLength={500} placeholder="수동 검토 시 조정할 내용을 기록하세요" /></label><div className="recommendation-actions"><button className="primary" onClick={() => recordDecision("approved")}>승인 기록</button><button className="ghost" onClick={() => recordDecision("modified")}>수정 기록</button><button className="ghost" onClick={() => recordDecision("later")}>나중에</button><button className="ghost" onClick={() => recordDecision("rejected")}>거절</button></div></div> : <div className="recommendation-body"><p>이 Opportunity의 Observation·Estimate·한계를 바꾸지 않는 수동 실험 초안을 만들 수 있습니다.</p><button className="primary" onClick={createRecommendationDraft}>추천 초안 만들기</button></div>}{recommendationMessage && <p className="recommendation-message">{recommendationMessage}</p>}</> : <div className="recommendation-body"><span>Observation 전용</span><strong>{opportunityTypeLabel[opportunity.type]} 후보를 선택했습니다.</strong><p>현재는 계산된 사실과 한계만 보관합니다. 원인·실제 손실·고객 의도·외부 실행을 가정한 Recommendation은 만들지 않습니다.</p><ul className="limitations">{opportunity.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}</ul></div>}</article>}
         {recommendation?.status === "approved" && <article className="opportunity-card action-plan-card"><div className="card-title"><div><h2>Action · 수동 실행 계획</h2><p>계획과 상태 이력만 기록합니다. 외부 실행은 하지 않습니다.</p></div></div>{action ? <div className="recommendation-body"><span>상태 · {action.status}</span><strong>{action.title}</strong><p>예정 시작 {new Date(action.planned_start_at).toLocaleString("ko-KR")}{action.planned_budget ? ` · 예정 예산 ${money(action.planned_budget)}` : ""}</p><div className="recommendation-actions">{action.status === "planned" && <><button className="primary" onClick={() => updateActionStatus("in_progress")}>실행 시작 기록</button><button className="ghost" onClick={() => updateActionStatus("cancelled")}>취소 기록</button></>}{action.status === "in_progress" && <><button className="primary" onClick={() => updateActionStatus("completed")}>완료 기록</button><button className="ghost" onClick={() => updateActionStatus("cancelled")}>취소 기록</button></>}</div></div> : <div className="action-form"><label>Action 제목 <input value={actionTitle} onChange={(event) => setActionTitle(event.target.value)} maxLength={160} placeholder="예: 화요일 오후 수동 혜택 실험" /></label><label>예정 시작 <input type="datetime-local" value={actionStartAt} onChange={(event) => setActionStartAt(event.target.value)} /></label><label>예정 종료 (선택) <input type="datetime-local" value={actionEndAt} onChange={(event) => setActionEndAt(event.target.value)} /></label><label>예정 예산 KRW (선택) <input inputMode="decimal" value={actionBudget} onChange={(event) => setActionBudget(event.target.value)} placeholder="0" /></label><label>내부 실행 메모 (선택) <input value={actionNotes} onChange={(event) => setActionNotes(event.target.value)} maxLength={1000} placeholder="외부 발송 내용이나 고객 정보는 입력하지 마세요" /></label><button className="primary" onClick={createAction}>수동 Action 계획 저장</button></div>}{actionMessage && <p className="recommendation-message">{actionMessage}</p>}</article>}
         {action?.status === "completed" && <article className="opportunity-card result-card"><div className="card-title"><div><h2>Result · 실행 결과와 측정</h2><p>실행 메모는 사람이 기록하고, 실제 완료 매출은 저장된 예약 데이터로만 계산합니다.</p></div></div>{actionResult ? <div className="recommendation-body"><span>결과 기록 완료</span><strong>{actionResult.execution_summary}</strong><p>측정 기간 {new Date(actionResult.measurement_start_at).toLocaleString("ko-KR")}–{new Date(actionResult.measurement_end_at).toLocaleString("ko-KR")}{actionResult.actual_spend ? ` · 실제 지출 ${money(actionResult.actual_spend)}` : ""}</p>{measurement && <div className="measurement-summary"><p><b>관찰 실제 완료 매출</b> {money(measurement.observed.actual_revenue)} · 예약 {measurement.observed.appointment_count}건 · 완료 {measurement.observed.completed_count}건</p>{measurement.baseline_average && <p><b>직전 4주 동일 창 평균</b> {money(measurement.baseline_average.actual_revenue)} · 차이 {money(measurement.change_from_baseline?.actual_revenue ?? null)}</p>}<small>{measurement.limitations[0]}</small></div>}</div> : <div className="action-form"><label>실행 요약 <input value={executionSummary} onChange={(event) => setExecutionSummary(event.target.value)} maxLength={1000} placeholder="실제로 수행한 내용을 간단히 기록하세요" /></label><label>측정 시작 <input type="datetime-local" value={measurementStartAt} onChange={(event) => setMeasurementStartAt(event.target.value)} /></label><label>측정 종료 <input type="datetime-local" value={measurementEndAt} onChange={(event) => setMeasurementEndAt(event.target.value)} /></label><label>실제 지출 KRW (선택) <input inputMode="decimal" value={actualSpend} onChange={(event) => setActualSpend(event.target.value)} placeholder="0" /></label><label>결과 메모 (선택) <input value={outcomeNotes} onChange={(event) => setOutcomeNotes(event.target.value)} maxLength={1000} placeholder="고객 개인정보나 외부 채널 원문은 입력하지 마세요" /></label><button className="primary" onClick={recordActionResult}>결과 기록 및 측정</button></div>}{resultMessage && <p className="recommendation-message">{resultMessage}</p>}<p className="safety">✓ 동일 시간대의 단순 비교이며, Action 효과·추가매출·ROI를 단정하지 않습니다.</p></article>}
         {actionHistory.length > 0 && <article className="opportunity-card action-history-card"><div className="card-title"><div><h2>최근 Action 이력</h2><p>이 사업장에 기록된 수동 실행의 상태입니다.</p></div></div><div className="action-history-list">{actionHistory.slice(0, 5).map((item) => <div key={item.id}><span>상태 · {item.status}</span><strong>{item.title}</strong><small>{new Date(item.planned_start_at).toLocaleString("ko-KR")}{item.planned_budget ? ` · 예정 예산 ${money(item.planned_budget)}` : ""}</small></div>)}</div><p className="safety">✓ 이력은 실행 상태를 보여주며, 성과 인과관계를 의미하지 않습니다.</p></article>}
