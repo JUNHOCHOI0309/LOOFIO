@@ -134,8 +134,13 @@ Action 상태는 `planned → in_progress → completed` 또는 `planned/in_prog
 ## Measurements
 
 ```text
+POST   /api/v1/actions/{actionId}/results
+GET    /api/v1/actions/{actionId}/results
 GET    /api/v1/actions/{actionId}/measurements
 ```
+
+`results`는 완료된 Action에 사람이 기록하는 실행 요약, 측정 기간, 선택적 실제 지출 및 메모다. 실제 매출은 이 입력값으로 받지 않고 저장된 Appointment로만 측정한다.
+`measurements`는 Result의 측정 기간과 같은 길이의 직전 1~4주 창을 baseline으로 사용해 예약·완료·취소·실제 완료 매출의 관찰값과 단순 차이를 반환한다. 이는 인과효과나 Incremental Revenue가 아니다. method version과 limitations를 응답에 포함한다.
 
 ---
 
@@ -255,7 +260,7 @@ Expected Effect는 estimate다.
 
 실제 결과는 Action Result/Measurement에서만 반환한다.
 
-현재 LowDemandSlot 초안은 `manual_time_slot_offer_test` / `manual` channel만 제공한다. 대상 고객, 혜택, 예산은 설정하지 않으며, 이를 입력·승인·실행하는 Action endpoint는 아직 구현하지 않는다.
+현재 LowDemandSlot 초안은 `manual_time_slot_offer_test` / `manual` channel만 제공한다. 대상 고객과 혜택을 설정하거나 외부 채널을 실행하지 않으며, Action에서는 내부 실행 계획과 예정 예산만 기록할 수 있다.
 
 ---
 

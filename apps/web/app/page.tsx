@@ -16,6 +16,8 @@ type LowDemandDetection = { candidates: LowDemandCandidate[]; limitations: strin
 type Opportunity = { id: string; estimate: { value_low: Money; value_high: Money; } | null; };
 type Recommendation = { id: string; status: "draft" | "approved" | "rejected" | "modified" | "later"; hypothesis: string; explanation: string; limitations: string[]; };
 type Action = { id: string; status: "planned" | "in_progress" | "completed" | "cancelled"; title: string; planned_start_at: string; planned_budget: Money | null; };
+type ActionResultData = { id: string; execution_summary: string; measurement_start_at: string; measurement_end_at: string; actual_spend: Money | null; outcome_notes: string | null; };
+type Measurement = { observed: { appointment_count: number; completed_count: number; actual_revenue: Money; }; baseline_average: { appointment_count: number; completed_count: number; actual_revenue: Money; } | null; change_from_baseline: { appointment_count: number; completed_count: number; actual_revenue: Money; } | null; limitations: string[]; };
 
 const weekdayLabel: Record<string, string> = { MONDAY: "월", TUESDAY: "화", WEDNESDAY: "수", THURSDAY: "목", FRIDAY: "금", SATURDAY: "토", SUNDAY: "일" };
 const money = (value: Money | null) => value ? new Intl.NumberFormat("ko-KR", { style: "currency", currency: value.currency, maximumFractionDigits: 0 }).format(Number(value.amount)) : "—";
@@ -27,6 +29,8 @@ export default function Home() {
   const [opportunity, setOpportunity] = useState<Opportunity | null>(null);
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
   const [action, setAction] = useState<Action | null>(null);
+  const [actionResult, setActionResult] = useState<ActionResultData | null>(null);
+  const [measurement, setMeasurement] = useState<Measurement | null>(null);
   const [message, setMessage] = useState("데이터를 불러오고 있습니다…");
   const [recommendationMessage, setRecommendationMessage] = useState("");
   const [actionMessage, setActionMessage] = useState("");
@@ -36,6 +40,12 @@ export default function Home() {
   const [actionStartAt, setActionStartAt] = useState("");
   const [actionEndAt, setActionEndAt] = useState("");
   const [actionBudget, setActionBudget] = useState("");
+  const [executionSummary, setExecutionSummary] = useState("");
+  const [measurementStartAt, setMeasurementStartAt] = useState("");
+  const [measurementEndAt, setMeasurementEndAt] = useState("");
+  const [actualSpend, setActualSpend] = useState("");
+  const [outcomeNotes, setOutcomeNotes] = useState("");
+  const [resultMessage, setResultMessage] = useState("");
 
   useEffect(() => {
     async function loadDashboard() {
@@ -66,7 +76,11 @@ export default function Home() {
               setRecommendation(currentRecommendation);
               if (currentRecommendation) {
                 const actionsResponse = await fetch(`${apiBaseUrl}/recommendations/${currentRecommendation.id}/actions`, { credentials: "include" });
-                if (actionsResponse.ok) setAction((await actionsResponse.json() as Action[])[0] ?? null);
+                if (actionsResponse.ok) {
+                  const currentAction = (await actionsResponse.json() as Action[])[0] ?? null;
+                  setAction(currentAction);
+                  if (currentAction?.status === "completed") await loadActionResult(currentAction.id);
+                }
               }
             }
           }
@@ -76,6 +90,14 @@ export default function Home() {
     }
     loadDashboard();
   }, []);
+
+  async function loadActionResult(actionId: string) {
+    const resultResponse = await fetch(`${apiBaseUrl}/actions/${actionId}/results`, { credentials: "include" });
+    if (!resultResponse.ok) return;
+    setActionResult(await resultResponse.json() as ActionResultData);
+    const measurementResponse = await fetch(`${apiBaseUrl}/actions/${actionId}/measurements`, { credentials: "include" });
+    if (measurementResponse.ok) setMeasurement(await measurementResponse.json() as Measurement);
+  }
 
   async function createRecommendationDraft() {
     if (!opportunity) return;
@@ -120,7 +142,22 @@ export default function Home() {
     const body = await response.json();
     if (!response.ok) { setActionMessage(body.error?.message ?? "Action 상태를 저장하지 못했습니다."); return; }
     setAction(body as Action);
-    setActionMessage("상태 이력을 저장했습니다. 결과 입력과 효과 측정은 다음 단계에서 진행합니다.");
+    setActionMessage(status === "completed" ? "완료를 기록했습니다. 아래에서 실행 결과와 측정 기간을 입력해 주세요." : "상태 이력을 저장했습니다.");
+  }
+
+  async function recordActionResult() {
+    if (!action || !executionSummary || !measurementStartAt || !measurementEndAt) { setResultMessage("실행 요약과 측정 시작·종료 시각을 입력해 주세요."); return; }
+    setResultMessage("실행 결과를 저장하고 예약 데이터를 측정하고 있습니다…");
+    const response = await fetch(`${apiBaseUrl}/actions/${action.id}/results`, {
+      method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ execution_summary: executionSummary, measurement_start_at: new Date(measurementStartAt).toISOString(), measurement_end_at: new Date(measurementEndAt).toISOString(), actual_spend: actualSpend ? { amount: actualSpend, currency: "KRW" } : null, outcome_notes: outcomeNotes || null }),
+    });
+    const body = await response.json();
+    if (!response.ok) { setResultMessage(body.error?.message ?? "실행 결과를 저장하지 못했습니다."); return; }
+    setActionResult(body.result as ActionResultData);
+    const measurementResponse = await fetch(`${apiBaseUrl}/actions/${action.id}/measurements`, { credentials: "include" });
+    if (measurementResponse.ok) setMeasurement(await measurementResponse.json() as Measurement);
+    setResultMessage("결과와 관찰 기반 비교를 저장했습니다. 변화량은 인과효과나 추가매출을 뜻하지 않습니다.");
   }
 
   const topSlots = useMemo(() => [...(metrics?.time_slots ?? [])].sort((a, b) => b.appointment_count - a.appointment_count).slice(0, 5), [metrics]);
@@ -143,6 +180,7 @@ export default function Home() {
         <div className="content-grid"><article className="chart-card"><div className="card-title"><div><h2>요일 × 2시간 예약 수요</h2><p>저장된 예약을 기준으로 계산한 Observation입니다.</p></div></div><div className="slot-list">{topSlots.map((slot) => <div key={`${slot.weekday}-${slot.slot_start_hour}`}><strong>{weekdayLabel[slot.weekday]}요일 {slot.slot_start_hour.toString().padStart(2, "0")}:00–{(slot.slot_start_hour + 2).toString().padStart(2, "0")}:00</strong><span>예약 {slot.appointment_count} · 완료 {slot.completed_count} · 취소율 {(slot.cancellation_rate * 100).toFixed(1)}%</span></div>)}</div></article><article className="action-card"><div className="card-title"><div><h2>수요 저하 후보</h2><p>Detector가 계산한 Observation입니다.</p></div></div><div className="action-priority">{topCandidate ? <><span>Observation</span><strong>{weekdayLabel[topCandidate.weekday]}요일 {topCandidate.slot_start_hour.toString().padStart(2, "0")}:00–{(topCandidate.slot_start_hour + 2).toString().padStart(2, "0")} 수요 저하</strong><p>주 평균 예약 {topCandidate.average_appointments_per_week}건 · 같은 요일 비교 중앙값 {topCandidate.comparison_median_per_week}건 · Demand Index {topCandidate.demand_index}</p>{opportunity?.estimate && <p><b>Estimate</b> · 월 {money(opportunity.estimate.value_low)}–{money(opportunity.estimate.value_high)} 추가 매출 여지</p>}</> : <><span>관측 부족 또는 후보 없음</span><strong>수요 저하 후보를 확정하지 않았습니다.</strong><p>{detection?.limitations[0] ?? "Detector 결과를 불러오는 중입니다."}</p></>}</div><p className="safety">✓ Estimate는 가정 기반 범위이며, 실제 매출이나 Recommendation이 아닙니다.</p></article></div>
         {opportunity && <article className="opportunity-card recommendation-card"><div className="card-title"><div><h2>Recommendation · 사용자 결정</h2><p>Observation과 Estimate를 바꾸지 않는 검토용 실행 가설입니다.</p></div></div>{recommendation ? <div className="recommendation-body"><span>상태 · {recommendation.status}</span><strong>{recommendation.hypothesis}</strong><p>{recommendation.explanation}</p><ul className="limitations">{recommendation.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}</ul><label>수정 메모 <input value={manualNotes} onChange={(event) => setManualNotes(event.target.value)} maxLength={500} placeholder="수동 검토 시 조정할 내용을 기록하세요" /></label><div className="recommendation-actions"><button className="primary" onClick={() => recordDecision("approved")}>승인 기록</button><button className="ghost" onClick={() => recordDecision("modified")}>수정 기록</button><button className="ghost" onClick={() => recordDecision("later")}>나중에</button><button className="ghost" onClick={() => recordDecision("rejected")}>거절</button></div></div> : <div className="recommendation-body"><p>이 Opportunity의 Observation·Estimate·한계를 바꾸지 않는 수동 실험 초안을 만들 수 있습니다.</p><button className="primary" onClick={createRecommendationDraft}>추천 초안 만들기</button></div>}{recommendationMessage && <p className="recommendation-message">{recommendationMessage}</p>}</article>}
         {recommendation?.status === "approved" && <article className="opportunity-card action-plan-card"><div className="card-title"><div><h2>Action · 수동 실행 계획</h2><p>계획과 상태 이력만 기록합니다. 외부 실행은 하지 않습니다.</p></div></div>{action ? <div className="recommendation-body"><span>상태 · {action.status}</span><strong>{action.title}</strong><p>예정 시작 {new Date(action.planned_start_at).toLocaleString("ko-KR")}{action.planned_budget ? ` · 예정 예산 ${money(action.planned_budget)}` : ""}</p><div className="recommendation-actions">{action.status === "planned" && <><button className="primary" onClick={() => updateActionStatus("in_progress")}>실행 시작 기록</button><button className="ghost" onClick={() => updateActionStatus("cancelled")}>취소 기록</button></>}{action.status === "in_progress" && <><button className="primary" onClick={() => updateActionStatus("completed")}>완료 기록</button><button className="ghost" onClick={() => updateActionStatus("cancelled")}>취소 기록</button></>}</div></div> : <div className="action-form"><label>Action 제목 <input value={actionTitle} onChange={(event) => setActionTitle(event.target.value)} maxLength={160} placeholder="예: 화요일 오후 수동 혜택 실험" /></label><label>예정 시작 <input type="datetime-local" value={actionStartAt} onChange={(event) => setActionStartAt(event.target.value)} /></label><label>예정 종료 (선택) <input type="datetime-local" value={actionEndAt} onChange={(event) => setActionEndAt(event.target.value)} /></label><label>예정 예산 KRW (선택) <input inputMode="decimal" value={actionBudget} onChange={(event) => setActionBudget(event.target.value)} placeholder="0" /></label><label>내부 실행 메모 (선택) <input value={actionNotes} onChange={(event) => setActionNotes(event.target.value)} maxLength={1000} placeholder="외부 발송 내용이나 고객 정보는 입력하지 마세요" /></label><button className="primary" onClick={createAction}>수동 Action 계획 저장</button></div>}{actionMessage && <p className="recommendation-message">{actionMessage}</p>}</article>}
+        {action?.status === "completed" && <article className="opportunity-card result-card"><div className="card-title"><div><h2>Result · 실행 결과와 측정</h2><p>실행 메모는 사람이 기록하고, 실제 완료 매출은 저장된 예약 데이터로만 계산합니다.</p></div></div>{actionResult ? <div className="recommendation-body"><span>결과 기록 완료</span><strong>{actionResult.execution_summary}</strong><p>측정 기간 {new Date(actionResult.measurement_start_at).toLocaleString("ko-KR")}–{new Date(actionResult.measurement_end_at).toLocaleString("ko-KR")}{actionResult.actual_spend ? ` · 실제 지출 ${money(actionResult.actual_spend)}` : ""}</p>{measurement && <div className="measurement-summary"><p><b>관찰 실제 완료 매출</b> {money(measurement.observed.actual_revenue)} · 예약 {measurement.observed.appointment_count}건 · 완료 {measurement.observed.completed_count}건</p>{measurement.baseline_average && <p><b>직전 4주 동일 창 평균</b> {money(measurement.baseline_average.actual_revenue)} · 차이 {money(measurement.change_from_baseline?.actual_revenue ?? null)}</p>}<small>{measurement.limitations[0]}</small></div>}</div> : <div className="action-form"><label>실행 요약 <input value={executionSummary} onChange={(event) => setExecutionSummary(event.target.value)} maxLength={1000} placeholder="실제로 수행한 내용을 간단히 기록하세요" /></label><label>측정 시작 <input type="datetime-local" value={measurementStartAt} onChange={(event) => setMeasurementStartAt(event.target.value)} /></label><label>측정 종료 <input type="datetime-local" value={measurementEndAt} onChange={(event) => setMeasurementEndAt(event.target.value)} /></label><label>실제 지출 KRW (선택) <input inputMode="decimal" value={actualSpend} onChange={(event) => setActualSpend(event.target.value)} placeholder="0" /></label><label>결과 메모 (선택) <input value={outcomeNotes} onChange={(event) => setOutcomeNotes(event.target.value)} maxLength={1000} placeholder="고객 개인정보나 외부 채널 원문은 입력하지 마세요" /></label><button className="primary" onClick={recordActionResult}>결과 기록 및 측정</button></div>}{resultMessage && <p className="recommendation-message">{resultMessage}</p>}<p className="safety">✓ 동일 시간대의 단순 비교이며, Action 효과·추가매출·ROI를 단정하지 않습니다.</p></article>}
         <article className="opportunity-card"><div className="card-title"><div><h2>계산 범위와 한계</h2><p>실제 데이터와 추정치를 혼합하지 않습니다.</p></div></div><ul className="limitations">{[...metrics.limitations, ...(detection?.limitations ?? [])].map((limitation) => <li key={limitation}>{limitation}</li>)}</ul></article>
       </>}
       <footer>ⓘ 실제 완료 매출은 완료된 예약의 결제금액만 합산합니다. 예상 효과는 아직 표시하지 않습니다.</footer>

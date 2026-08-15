@@ -46,6 +46,7 @@ class ActionStatusEvent(BaseModel):
 
 class Action(BaseModel):
     id: str
+    business_id: str
     recommendation_id: str
     version: str
     status: ActionStatus

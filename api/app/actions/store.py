@@ -179,7 +179,7 @@ class InMemoryActionStore:
         action_type, channel = self.recommendation_types[recommendation_id]
         event = ActionStatusEvent(id=str(uuid4()), status="planned", changed_by_user_id=user_id, created_at=now)
         action = Action(
-            id=str(uuid4()), recommendation_id=recommendation_id, version=ACTION_VERSION, status="planned", action_type=action_type,
+            id=str(uuid4()), business_id="business-default", recommendation_id=recommendation_id, version=ACTION_VERSION, status="planned", action_type=action_type,
             channel=channel, title=payload.title.strip(), execution_notes=payload.execution_notes, planned_start_at=payload.planned_start_at,
             planned_end_at=payload.planned_end_at, planned_budget=payload.planned_budget, created_by_user_id=user_id,
             created_at=now, updated_at=now, status_events=[event],
@@ -217,7 +217,7 @@ class InMemoryActionStore:
 
 def _action_from_row(row: dict, event_rows: list[dict]) -> Action:
     return Action(
-        id=str(row["id"]), recommendation_id=str(row["recommendation_id"]), version=row["action_version"], status=row["status"],
+        id=str(row["id"]), business_id=str(row["business_id"]), recommendation_id=str(row["recommendation_id"]), version=row["action_version"], status=row["status"],
         action_type=row["action_type"], channel=row["channel"], title=row["title"], execution_notes=row["execution_notes"],
         planned_start_at=row["planned_start_at"], planned_end_at=row["planned_end_at"], planned_budget=row["planned_budget"],
         created_by_user_id=str(row["created_by_user_id"]), started_at=row["started_at"], completed_at=row["completed_at"],
