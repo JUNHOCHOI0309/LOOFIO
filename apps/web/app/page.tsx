@@ -15,7 +15,7 @@ type LowDemandCandidate = { weekday: string; slot_start_hour: number; average_ap
 type LowDemandDetection = { candidates: LowDemandCandidate[]; limitations: string[]; };
 type RevenueGapCandidate = { weekday: string; slot_start_hour: number; weekly_booking_gap: number; completed_payment_sample_count: number; average_reference_paid_amount: Money; monthly_value_low: Money; monthly_value_high: Money; };
 type RevenueGapDetection = { candidates: RevenueGapCandidate[]; limitations: string[]; };
-type Opportunity = { id: string; estimate: { value_low: Money; value_high: Money; } | null; };
+type Opportunity = { id: string; estimate: { value_low: Money; value_high: Money; } | null; detector: { version: string; }; };
 type Recommendation = { id: string; status: "draft" | "approved" | "rejected" | "modified" | "later"; hypothesis: string; explanation: string; limitations: string[]; };
 type Action = { id: string; status: "planned" | "in_progress" | "completed" | "cancelled"; title: string; planned_start_at: string; planned_budget: Money | null; };
 type ActionResultData = { id: string; execution_summary: string; measurement_start_at: string; measurement_end_at: string; actual_spend: Money | null; outcome_notes: string | null; };
@@ -75,7 +75,8 @@ export default function Home() {
         if (revenueGapResponse.ok) setRevenueGap(await revenueGapResponse.json() as RevenueGapDetection);
         const opportunitiesResponse = await fetch(`${apiBaseUrl}/businesses/${currentBusiness.business_id}/opportunities`, { credentials: "include" });
         if (opportunitiesResponse.ok) {
-          const currentOpportunity = (await opportunitiesResponse.json() as Opportunity[])[0] ?? null;
+          const opportunities = await opportunitiesResponse.json() as Opportunity[];
+          const currentOpportunity = opportunities.find((item) => item.detector.version === "low-demand-revenue-gap-v2") ?? opportunities[0] ?? null;
           setOpportunity(currentOpportunity);
           if (currentOpportunity) {
             const recommendationsResponse = await fetch(`${apiBaseUrl}/opportunities/${currentOpportunity.id}/recommendations`, { credentials: "include" });

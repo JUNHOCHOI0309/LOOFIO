@@ -1,14 +1,21 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
-from app.analytics.detectors.low_demand_slots import DETECTOR_VERSION, detect_low_demand_slots
-from app.metrics.appointments import AppointmentMetricRow, calculate_appointment_metrics
-from app.schemas.metrics import Money
+from app.analytics.detectors.low_demand_slots import DETECTOR_VERSION as LOW_DEMAND_DETECTOR_VERSION, detect_low_demand_slots
+from app.analytics.detectors.revenue_gap import detect_revenue_gaps
+from app.metrics.appointments import AppointmentMetricRow
+from app.schemas.detectors import RevenueGapCandidate
 from app.schemas.opportunities import OpportunityEstimate, OpportunityObservation
+
+
+OPPORTUNITY_DETECTOR_CODE = "LOW_DEMAND_REVENUE_GAP"
+OPPORTUNITY_DETECTOR_VERSION = "low-demand-revenue-gap-v2"
 
 
 @dataclass(frozen=True)
 class OpportunityDraft:
+    detector_code: str
+    detector_version: str
     natural_key: str
     segment: dict[str, str | int]
     observation: OpportunityObservation
@@ -21,8 +28,10 @@ class OpportunityDraft:
 
 def build_low_demand_opportunity_drafts(rows: list[AppointmentMetricRow]) -> list[OpportunityDraft]:
     detection = detect_low_demand_slots(rows)
-    metrics = calculate_appointment_metrics(rows)
-    average_revenue = metrics.average_completed_revenue
+    revenue_gaps = {
+        (candidate.weekday, candidate.slot_start_hour): candidate
+        for candidate in detect_revenue_gaps(rows).candidates
+    }
     drafts: list[OpportunityDraft] = []
     for candidate in detection.candidates:
         observation = OpportunityObservation(
@@ -31,23 +40,26 @@ def build_low_demand_opportunity_drafts(rows: list[AppointmentMetricRow]) -> lis
             demand_index=candidate.demand_index,
             observed_weeks=candidate.observed_weeks,
         )
-        estimate = _estimate(candidate.comparison_median_per_week - candidate.average_appointments_per_week, average_revenue)
-        confidence = _confidence(candidate.observed_weeks, average_revenue is not None)
+        revenue_gap = revenue_gaps.get((candidate.weekday, candidate.slot_start_hour))
+        estimate = _estimate(revenue_gap)
+        confidence = _confidence(candidate.observed_weeks, revenue_gap is not None)
         score = _score(estimate, candidate.observed_weeks, confidence)
         segment = {"weekday": candidate.weekday, "start_hour": candidate.slot_start_hour, "end_hour": candidate.slot_start_hour + 2}
         limitations = [*detection.limitations]
         if not estimate:
-            limitations.append("완료 예약의 결제금액 표본이 없어 금액 추정은 제공하지 않습니다.")
+            limitations.append("같은 요일 비교 시간대의 완료 결제금액 표본이 5건 미만이라 금액 추정은 제공하지 않습니다.")
         evidence = [
             (
                 "LOW_DEMAND_OBSERVATION",
-                {"segment": segment, "observation": observation.model_dump(), "detector_version": DETECTOR_VERSION},
+                {"segment": segment, "observation": observation.model_dump(), "detector_version": LOW_DEMAND_DETECTOR_VERSION},
             ),
         ]
         if estimate:
-            evidence.append(("REVENUE_GAP_ASSUMPTIONS", estimate.model_dump()))
+            evidence.append(("REVENUE_GAP_BENCHMARK", revenue_gap.model_dump(mode="json")))
         drafts.append(
             OpportunityDraft(
+                detector_code=OPPORTUNITY_DETECTOR_CODE,
+                detector_version=OPPORTUNITY_DETECTOR_VERSION,
                 natural_key=f"{candidate.weekday}:{candidate.slot_start_hour}",
                 segment=segment,
                 observation=observation,
@@ -61,17 +73,16 @@ def build_low_demand_opportunity_drafts(rows: list[AppointmentMetricRow]) -> lis
     return drafts
 
 
-def _estimate(weekly_booking_gap: float, average_revenue: Money | None) -> OpportunityEstimate | None:
-    if weekly_booking_gap <= 0 or not average_revenue:
+def _estimate(revenue_gap: RevenueGapCandidate | None) -> OpportunityEstimate | None:
+    if not revenue_gap:
         return None
-    base_monthly_value = Decimal(str(weekly_booking_gap)) * Decimal(average_revenue.amount) * Decimal("4.345")
     return OpportunityEstimate(
-        value_low=Money(amount=f"{(base_monthly_value * Decimal('0.50')).quantize(Decimal('0.01'))}"),
-        value_high=Money(amount=f"{base_monthly_value.quantize(Decimal('0.01'))}"),
+        value_low=revenue_gap.monthly_value_low,
+        value_high=revenue_gap.monthly_value_high,
         assumptions=[
             "같은 요일의 비교 시간대 중앙값까지 예약 수요가 회복된다고 가정합니다.",
             "주간 예약 격차의 50~100%가 회복되는 시나리오를 사용합니다.",
-            "완료 예약의 평균 paid_amount와 월 4.345주를 사용합니다.",
+            f"같은 요일 비교 시간대의 완료 결제금액 표본 {revenue_gap.completed_payment_sample_count}건과 월 4.345주를 사용합니다.",
         ],
     )
 

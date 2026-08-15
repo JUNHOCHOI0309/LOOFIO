@@ -2,6 +2,7 @@ import base64
 import json
 from datetime import datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from itsdangerous import TimestampSigner
@@ -10,6 +11,7 @@ from app.auth.store import InMemoryAuthStore
 from app.main import app
 from app.metrics.appointments import AppointmentMetricRow
 from app.metrics.store import InMemoryAppointmentMetricStore
+from app.imports.appointments import parse_appointments_csv
 from app.opportunities.low_demand import build_low_demand_opportunity_drafts
 from app.opportunities.store import InMemoryOpportunityStore
 from app.schemas.auth import AuthenticatedUser
@@ -26,6 +28,8 @@ def test_low_demand_opportunity_separates_observation_from_estimate() -> None:
     assert "50~100%" in monday_morning.estimate.assumptions[1]
     assert monday_morning.score <= 100
     assert monday_morning.confidence < 1
+    assert monday_morning.detector_version == "low-demand-revenue-gap-v2"
+    assert "비교 시간대의 완료 결제금액 표본" in monday_morning.estimate.assumptions[2]
 
 
 def test_low_demand_opportunity_omits_estimate_without_paid_amounts() -> None:
@@ -34,6 +38,20 @@ def test_low_demand_opportunity_omits_estimate_without_paid_amounts() -> None:
     assert drafts
     assert all(draft.estimate is None for draft in drafts)
     assert "결제금액 표본" in drafts[0].limitations[-1]
+
+
+def test_project_sample_pack_exercises_revenue_gap_scenarios() -> None:
+    positive = build_low_demand_opportunity_drafts(_fixture_metric_rows("hospital_revenue_gap_positive_v1.csv"))
+    sparse = build_low_demand_opportunity_drafts(_fixture_metric_rows("hospital_revenue_gap_sparse_payment_v1.csv"))
+    operational = build_low_demand_opportunity_drafts(_fixture_metric_rows("hospital_operational_mix_v1.csv"))
+
+    assert len(positive) == 1
+    assert positive[0].estimate is not None
+    assert positive[0].estimate.value_high.amount == "805442.82"
+    assert len(sparse) == 1
+    assert sparse[0].estimate is None
+    assert len(operational) == 7
+    assert all(draft.estimate is not None for draft in operational)
 
 
 def test_refresh_persists_opportunities_idempotently_within_tenant(monkeypatch) -> None:
@@ -73,6 +91,13 @@ def _twelve_week_demand_rows(*, with_payments: bool) -> list[AppointmentMetricRo
         rows.extend(AppointmentMetricRow(visit_start_at=day.replace(hour=14), status="completed", paid_amount=paid_amount) for _ in range(4))
         rows.extend(AppointmentMetricRow(visit_start_at=day.replace(hour=16), status="completed", paid_amount=paid_amount) for _ in range(3))
     return rows
+
+
+def _fixture_metric_rows(filename: str) -> list[AppointmentMetricRow]:
+    root = Path(__file__).resolve().parents[2]
+    parsed = parse_appointments_csv((root / "sample-data" / "appointments" / filename).read_bytes())
+    assert not parsed.errors
+    return [AppointmentMetricRow(visit_start_at=row.visit_start_at, status=row.status, paid_amount=row.paid_amount) for row in parsed.rows]
 
 
 def _authenticated_client(monkeypatch):

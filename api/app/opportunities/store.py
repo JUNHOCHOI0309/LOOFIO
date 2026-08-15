@@ -38,22 +38,22 @@ class PostgresOpportunityStore:
             for draft in drafts:
                 cursor.execute(
                     "INSERT INTO opportunities (tenant_id, business_id, opportunity_type, detector_code, detector_version, natural_key, segment, observation, estimate, score, confidence, limitations) "
-                    "VALUES (%s, %s, 'LOW_DEMAND_SLOT', 'LOW_DEMAND_SLOT', 'low-demand-slot-v1', %s, %s, %s, %s, %s, %s, %s) "
+                    "VALUES (%s, %s, 'LOW_DEMAND_SLOT', %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                     "ON CONFLICT (tenant_id, business_id, detector_code, detector_version, natural_key) DO UPDATE SET "
                     "segment = EXCLUDED.segment, observation = EXCLUDED.observation, estimate = EXCLUDED.estimate, score = EXCLUDED.score, confidence = EXCLUDED.confidence, limitations = EXCLUDED.limitations, "
                     "last_detected_at = now(), updated_at = now() WHERE opportunities.status = 'open' "
                     "RETURNING *",
                     (
-                        tenant_id, business_id, draft.natural_key, Json(draft.segment), Json(draft.observation.model_dump()),
+                        tenant_id, business_id, draft.detector_code, draft.detector_version, draft.natural_key, Json(draft.segment), Json(draft.observation.model_dump()),
                         Json(draft.estimate.model_dump()) if draft.estimate else None, draft.score, draft.confidence, Json(draft.limitations),
                     ),
                 )
                 row = cursor.fetchone()
                 if not row:
                     cursor.execute(
-                        "SELECT * FROM opportunities WHERE tenant_id = %s AND business_id = %s AND detector_code = 'LOW_DEMAND_SLOT' "
-                        "AND detector_version = 'low-demand-slot-v1' AND natural_key = %s",
-                        (tenant_id, business_id, draft.natural_key),
+                    "SELECT * FROM opportunities WHERE tenant_id = %s AND business_id = %s AND detector_code = %s "
+                    "AND detector_version = %s AND natural_key = %s",
+                    (tenant_id, business_id, draft.detector_code, draft.detector_version, draft.natural_key),
                     )
                     row = cursor.fetchone()
                 opportunity = _opportunity_from_row(row)
@@ -105,7 +105,7 @@ class PostgresOpportunityStore:
 
 @dataclass
 class InMemoryOpportunityStore:
-    opportunities: dict[tuple[str, str, str], Opportunity]
+    opportunities: dict[tuple[str, str, str, str, str], Opportunity]
 
     def __init__(self) -> None:
         self.opportunities = {}
@@ -114,12 +114,12 @@ class InMemoryOpportunityStore:
         now = datetime.now(timezone.utc)
         results: list[Opportunity] = []
         for draft in drafts:
-            key = (tenant_id, business_id, draft.natural_key)
+            key = (tenant_id, business_id, draft.detector_code, draft.detector_version, draft.natural_key)
             existing = self.opportunities.get(key)
             opportunity = Opportunity(
                 id=existing.id if existing else str(uuid4()), type="LOW_DEMAND_SLOT", status=existing.status if existing else "open",
                 segment=draft.segment, observation=draft.observation, estimate=draft.estimate, score=draft.score, confidence=draft.confidence,
-                limitations=draft.limitations, detector=OpportunityDetector(code="LOW_DEMAND_SLOT", version="low-demand-slot-v1"),
+                limitations=draft.limitations, detector=OpportunityDetector(code=draft.detector_code, version=draft.detector_version),
                 first_detected_at=existing.first_detected_at if existing else now, last_detected_at=now,
             )
             if not existing or existing.status == "open":
@@ -129,13 +129,13 @@ class InMemoryOpportunityStore:
 
     def list_opportunities(self, *, tenant_id: str, business_id: str) -> list[Opportunity]:
         return sorted(
-            [item for (item_tenant, item_business, _), item in self.opportunities.items() if item_tenant == tenant_id and item_business == business_id],
+            [item for (item_tenant, item_business, _, _, _), item in self.opportunities.items() if item_tenant == tenant_id and item_business == business_id],
             key=lambda item: item.score,
             reverse=True,
         )
 
     def get_opportunity(self, *, tenant_id: str, opportunity_id: str) -> Opportunity:
-        for (item_tenant, _, _), opportunity in self.opportunities.items():
+        for (item_tenant, _, _, _, _), opportunity in self.opportunities.items():
             if item_tenant == tenant_id and opportunity.id == opportunity_id:
                 return opportunity
         raise OpportunityBusinessNotFound("해당 기회에 접근할 수 없습니다.")
