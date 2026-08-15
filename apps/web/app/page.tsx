@@ -53,6 +53,7 @@ type Opportunity = {
   limitations: string[];
   detector: { code: string; version: string; };
 };
+type OpportunityRefreshResult = { refreshed_count: number; opportunities: Opportunity[]; refreshed_detector_versions: string[]; };
 type Recommendation = { id: string; status: "draft" | "approved" | "rejected" | "modified" | "later"; hypothesis: string; explanation: string; limitations: string[]; };
 type Action = { id: string; status: "planned" | "in_progress" | "completed" | "cancelled"; title: string; planned_start_at: string; planned_budget: Money | null; };
 type ActionResultData = { id: string; execution_summary: string; measurement_start_at: string; measurement_end_at: string; actual_spend: Money | null; outcome_notes: string | null; };
@@ -104,6 +105,8 @@ export default function Home() {
   const [actionResult, setActionResult] = useState<ActionResultData | null>(null);
   const [measurement, setMeasurement] = useState<Measurement | null>(null);
   const [message, setMessage] = useState("데이터를 불러오고 있습니다…");
+  const [refreshMessage, setRefreshMessage] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [recommendationMessage, setRecommendationMessage] = useState("");
   const [actionMessage, setActionMessage] = useState("");
   const [manualNotes, setManualNotes] = useState("");
@@ -191,6 +194,28 @@ export default function Home() {
     if (currentAction?.status === "completed") await loadActionResult(currentAction.id);
   }
 
+  async function refreshOpportunities() {
+    if (!business) return;
+    setIsRefreshing(true);
+    setRefreshMessage("저장된 예약 데이터로 Opportunity를 갱신하고 있습니다…");
+    try {
+      const asOfDate = new Date().toISOString().slice(0, 10);
+      const response = await fetch(`${apiBaseUrl}/businesses/${business.business_id}/opportunities/refresh?as_of_date=${asOfDate}`, { method: "POST", credentials: "include" });
+      const body = await response.json() as OpportunityRefreshResult | { error?: { message?: string } };
+      if (!response.ok) { setRefreshMessage("error" in body ? body.error?.message ?? "Opportunity를 갱신하지 못했습니다." : "Opportunity를 갱신하지 못했습니다."); return; }
+      const refreshed = body as OpportunityRefreshResult;
+      setOpportunities(refreshed.opportunities);
+      const selected = refreshed.opportunities.find((item) => item.id === opportunity?.id)
+        ?? refreshed.opportunities.find((item) => item.detector.version === "low-demand-revenue-gap-v2")
+        ?? refreshed.opportunities[0]
+        ?? null;
+      if (selected) await selectOpportunity(selected);
+      else { setOpportunity(null); setRecommendation(null); setAction(null); }
+      setRefreshMessage(`${refreshed.refreshed_count}개 Opportunity를 갱신했습니다. ${refreshed.refreshed_detector_versions.join(", ")}`);
+    } catch { setRefreshMessage("API에 연결할 수 없어 Opportunity를 갱신하지 못했습니다."); }
+    finally { setIsRefreshing(false); }
+  }
+
   async function createRecommendationDraft() {
     if (!opportunity) return;
     setRecommendationMessage("추천 초안을 만들고 있습니다…");
@@ -270,8 +295,9 @@ export default function Home() {
   return <main className="app-shell">
     <aside className="sidebar"><div className="brand"><span>◒</span> LOOFIO</div><div className="workspace-name">{business?.name ?? "병원 선택"} <span>⌄</span></div><nav aria-label="Main navigation">{navigation.map(([icon, item], index) => <a className={index === 0 ? "active" : ""} href={item === "Data" ? "/data" : "/"} key={item}><span>{icon}</span>{item}</a>)}</nav><div className="sidebar-note"><span>✦</span><strong>예약 데이터에서<br />다음 기회를 찾으세요.</strong><a href="/data">데이터 업로드 →</a></div><a className="account" href="/login"><div>↗</div><p><strong>계정</strong><small>로그인 관리</small></p><span>›</span></a></aside>
     <section className="workspace">
-      <header><div><p className="breadcrumb">Dashboard <span>›</span> 예약 Observation</p><h1>병원 현황 <span>✦</span></h1><p className="subtitle">{business ? `${business.name} · ${business.location_name}의 저장된 예약 데이터입니다.` : "예약 데이터를 기준으로 사실을 계산합니다."}</p></div><a className="date-button" href="/data">▣ 데이터 업로드</a></header>
+      <header><div><p className="breadcrumb">Dashboard <span>›</span> 예약 Observation</p><h1>병원 현황 <span>✦</span></h1><p className="subtitle">{business ? `${business.name} · ${business.location_name}의 저장된 예약 데이터입니다.` : "예약 데이터를 기준으로 사실을 계산합니다."}</p></div><div className="header-actions"><button className="refresh-button" disabled={!business || isRefreshing} onClick={refreshOpportunities}>{isRefreshing ? "갱신 중…" : "↻ Opportunity 갱신"}</button><a className="date-button" href="/data">▣ 데이터 업로드</a></div></header>
       {message && <p className="dashboard-message">{message}</p>}
+      {refreshMessage && <p className="refresh-message">{refreshMessage}</p>}
       {metrics && metrics.appointment_count === 0 && <div className="dashboard-notice"><strong>아직 저장된 예약이 없습니다.</strong><p>Hospital v1 형식의 CSV를 업로드하면 실제 예약·매출 Observation을 표시합니다.</p><a href="/data">예약 CSV 업로드 →</a></div>}
       {metrics && metrics.appointment_count > 0 && <>
         <div className="metric-grid">{cards.map((card) => <article className="metric-card" key={card.label}><div className={`metric-icon ${card.tone}`}>{card.icon}</div><p>{card.label}</p><strong>{card.value}</strong><small>{card.change}</small></article>)}</div>

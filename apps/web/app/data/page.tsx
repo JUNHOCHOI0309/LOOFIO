@@ -115,7 +115,8 @@ export default function DataImportPage() {
       const payload = await response.json();
       if (!response.ok) { setMessage(payload.error?.details?.[0] ?? payload.error?.message ?? "예약 데이터를 저장하지 못했습니다."); return; }
       setResult(payload as ImportResult);
-      const refreshResponse = await fetch(`${apiBaseUrl}/businesses/${businessId}/opportunities/refresh`, { method: "POST", credentials: "include" });
+      const asOfDate = new Date().toISOString().slice(0, 10);
+      const refreshResponse = await fetch(`${apiBaseUrl}/businesses/${businessId}/opportunities/refresh?as_of_date=${asOfDate}`, { method: "POST", credentials: "include" });
       if (!refreshResponse.ok) { setMessage("예약 데이터는 저장됐지만 Opportunity 재분석은 완료하지 못했습니다."); return; }
       setMessage(null);
     } catch { setMessage("API에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요."); }
