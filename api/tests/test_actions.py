@@ -88,6 +88,21 @@ def test_viewer_cannot_create_or_change_actions(monkeypatch) -> None:
     assert response.json()["error"]["code"] == "FORBIDDEN"
 
 
+def test_business_action_history_is_tenant_scoped_and_newest_first(monkeypatch) -> None:
+    client, tenant_id, action_store = _authenticated_client(monkeypatch)
+    action_store.register_recommendation(tenant_id=tenant_id, recommendation_id="rec-history-old", status="approved", action_type="manual_time_slot_offer_test", channel="manual", business_id="business-history")
+    action_store.register_recommendation(tenant_id=tenant_id, recommendation_id="rec-history-new", status="approved", action_type="manual_time_slot_offer_test", channel="manual", business_id="business-history")
+    old = client.post("/api/v1/recommendations/rec-history-old/actions", json=ACTION_PAYLOAD).json()["action"]
+    new = client.post("/api/v1/recommendations/rec-history-new/actions", json={**ACTION_PAYLOAD, "title": "새 실행"}).json()["action"]
+
+    history = client.get("/api/v1/businesses/business-history/actions")
+    other_business = client.get("/api/v1/businesses/business-other/actions")
+
+    assert history.status_code == 200
+    assert [item["id"] for item in history.json()] == [new["id"], old["id"]]
+    assert other_business.status_code == 404
+
+
 def _authenticated_client(monkeypatch):
     auth_store = InMemoryAuthStore()
     user = auth_store.find_or_create_user(AuthenticatedUser(provider="google", provider_subject="action-user"))

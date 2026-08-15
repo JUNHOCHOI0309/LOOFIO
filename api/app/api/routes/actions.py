@@ -45,6 +45,17 @@ async def list_recommendation_actions(recommendation_id: str, request: Request) 
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"code": "ACTION_STORAGE_UNAVAILABLE", "message": str(error)}) from error
 
 
+@router.get("/businesses/{business_id}/actions", response_model=list[Action])
+async def list_business_actions(business_id: str, request: Request) -> list[Action]:
+    user = require_active_tenant_user(request)
+    try:
+        return request.app.state.action_store.list_for_business(tenant_id=user.active_tenant_id, business_id=business_id)
+    except ActionNotFound as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"code": "NOT_FOUND", "message": str(error)}) from error
+    except ActionStoreUnavailable as error:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"code": "ACTION_STORAGE_UNAVAILABLE", "message": str(error)}) from error
+
+
 @router.get("/actions/{action_id}", response_model=Action)
 async def get_action(action_id: str, request: Request) -> Action:
     user = require_active_tenant_user(request)
