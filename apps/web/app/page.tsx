@@ -58,6 +58,7 @@ type Recommendation = { id: string; status: "draft" | "approved" | "rejected" | 
 type Action = { id: string; status: "planned" | "in_progress" | "completed" | "cancelled"; title: string; planned_start_at: string; planned_budget: Money | null; };
 type ActionResultData = { id: string; execution_summary: string; measurement_start_at: string; measurement_end_at: string; actual_spend: Money | null; outcome_notes: string | null; };
 type Measurement = { observed: { appointment_count: number; completed_count: number; actual_revenue: Money; }; baseline_average: { appointment_count: number; completed_count: number; actual_revenue: Money; } | null; change_from_baseline: { appointment_count: number; completed_count: number; actual_revenue: Money; } | null; limitations: string[]; };
+type ActionMeasurementHistory = Record<string, { result: ActionResultData; measurement: Measurement | null; }>;
 
 const weekdayLabel: Record<string, string> = { MONDAY: "월", TUESDAY: "화", WEDNESDAY: "수", THURSDAY: "목", FRIDAY: "금", SATURDAY: "토", SUNDAY: "일" };
 const money = (value: Money | null) => value ? new Intl.NumberFormat("ko-KR", { style: "currency", currency: value.currency, maximumFractionDigits: 0 }).format(Number(value.amount)) : "—";
@@ -102,6 +103,7 @@ export default function Home() {
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
   const [action, setAction] = useState<Action | null>(null);
   const [actionHistory, setActionHistory] = useState<Action[]>([]);
+  const [actionMeasurementHistory, setActionMeasurementHistory] = useState<ActionMeasurementHistory>({});
   const [actionResult, setActionResult] = useState<ActionResultData | null>(null);
   const [measurement, setMeasurement] = useState<Measurement | null>(null);
   const [message, setMessage] = useState("데이터를 불러오고 있습니다…");
@@ -136,7 +138,7 @@ export default function Home() {
         if (!currentBusiness) { window.location.assign("/onboarding/business"); return; }
         setBusiness(currentBusiness);
         const actionHistoryResponse = await fetch(`${apiBaseUrl}/businesses/${currentBusiness.business_id}/actions`, { credentials: "include" });
-        if (actionHistoryResponse.ok) setActionHistory(await actionHistoryResponse.json() as Action[]);
+        if (actionHistoryResponse.ok) await loadActionHistory(await actionHistoryResponse.json() as Action[]);
         const metricsResponse = await fetch(`${apiBaseUrl}/businesses/${currentBusiness.business_id}/metrics/appointments`, { credentials: "include" });
         if (!metricsResponse.ok) { setMessage("예약 지표를 불러오지 못했습니다."); return; }
         setMetrics(await metricsResponse.json() as Metrics);
@@ -170,6 +172,19 @@ export default function Home() {
     setActionResult(await resultResponse.json() as ActionResultData);
     const measurementResponse = await fetch(`${apiBaseUrl}/actions/${actionId}/measurements`, { credentials: "include" });
     if (measurementResponse.ok) setMeasurement(await measurementResponse.json() as Measurement);
+  }
+
+  async function loadActionHistory(actions: Action[]) {
+    setActionHistory(actions);
+    const completedActions = actions.filter((item) => item.status === "completed");
+    const entries = await Promise.all(completedActions.map(async (item) => {
+      const resultResponse = await fetch(`${apiBaseUrl}/actions/${item.id}/results`, { credentials: "include" });
+      if (!resultResponse.ok) return null;
+      const result = await resultResponse.json() as ActionResultData;
+      const measurementResponse = await fetch(`${apiBaseUrl}/actions/${item.id}/measurements`, { credentials: "include" });
+      return [item.id, { result, measurement: measurementResponse.ok ? await measurementResponse.json() as Measurement : null }] as const;
+    }));
+    setActionMeasurementHistory(Object.fromEntries(entries.filter((entry): entry is NonNullable<typeof entry> => entry !== null)));
   }
 
   async function selectOpportunity(selected: Opportunity) {
@@ -261,6 +276,7 @@ export default function Home() {
     if (!response.ok) { setActionMessage(body.error?.message ?? "Action 상태를 저장하지 못했습니다."); return; }
     setAction(body as Action);
     setActionHistory((current) => [body as Action, ...current.filter((item) => item.id !== body.id)]);
+    if (status === "completed") setActionMeasurementHistory((current) => { const { [body.id]: _, ...remaining } = current; return remaining; });
     setActionMessage(status === "completed" ? "완료를 기록했습니다. 아래에서 실행 결과와 측정 기간을 입력해 주세요." : "상태 이력을 저장했습니다.");
   }
 
@@ -273,9 +289,12 @@ export default function Home() {
     });
     const body = await response.json();
     if (!response.ok) { setResultMessage(body.error?.message ?? "실행 결과를 저장하지 못했습니다."); return; }
-    setActionResult(body.result as ActionResultData);
+    const result = body.result as ActionResultData;
+    setActionResult(result);
     const measurementResponse = await fetch(`${apiBaseUrl}/actions/${action.id}/measurements`, { credentials: "include" });
-    if (measurementResponse.ok) setMeasurement(await measurementResponse.json() as Measurement);
+    const nextMeasurement = measurementResponse.ok ? await measurementResponse.json() as Measurement : null;
+    if (nextMeasurement) setMeasurement(nextMeasurement);
+    setActionMeasurementHistory((current) => ({ ...current, [action.id]: { result, measurement: nextMeasurement } }));
     setResultMessage("결과와 관찰 기반 비교를 저장했습니다. 변화량은 인과효과나 추가매출을 뜻하지 않습니다.");
   }
 
@@ -309,7 +328,7 @@ export default function Home() {
         {opportunity && <article className="opportunity-card recommendation-card"><div className="card-title"><div><h2>Recommendation · 사용자 결정</h2><p>Observation과 Estimate를 바꾸지 않는 검토용 실행 가설입니다.</p></div></div>{supportsRecommendation(opportunity) ? <>{recommendation ? <div className="recommendation-body"><span>상태 · {recommendation.status}</span><strong>{recommendation.hypothesis}</strong><p>{recommendation.explanation}</p><ul className="limitations">{recommendation.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}</ul><label>수정 메모 <input value={manualNotes} onChange={(event) => setManualNotes(event.target.value)} maxLength={500} placeholder="수동 검토 시 조정할 내용을 기록하세요" /></label><div className="recommendation-actions"><button className="primary" onClick={() => recordDecision("approved")}>승인 기록</button><button className="ghost" onClick={() => recordDecision("modified")}>수정 기록</button><button className="ghost" onClick={() => recordDecision("later")}>나중에</button><button className="ghost" onClick={() => recordDecision("rejected")}>거절</button></div></div> : <div className="recommendation-body"><p>이 Opportunity의 Observation·Estimate·한계를 바꾸지 않는 수동 검토 초안을 만들 수 있습니다.</p><button className="primary" onClick={createRecommendationDraft}>추천 초안 만들기</button></div>}{recommendationMessage && <p className="recommendation-message">{recommendationMessage}</p>}</> : null}</article>}
         {recommendation?.status === "approved" && <article className="opportunity-card action-plan-card"><div className="card-title"><div><h2>Action · 수동 실행 계획</h2><p>계획과 상태 이력만 기록합니다. 외부 실행은 하지 않습니다.</p></div></div>{action ? <div className="recommendation-body"><span>상태 · {action.status}</span><strong>{action.title}</strong><p>예정 시작 {new Date(action.planned_start_at).toLocaleString("ko-KR")}{action.planned_budget ? ` · 예정 예산 ${money(action.planned_budget)}` : ""}</p><div className="recommendation-actions">{action.status === "planned" && <><button className="primary" onClick={() => updateActionStatus("in_progress")}>실행 시작 기록</button><button className="ghost" onClick={() => updateActionStatus("cancelled")}>취소 기록</button></>}{action.status === "in_progress" && <><button className="primary" onClick={() => updateActionStatus("completed")}>완료 기록</button><button className="ghost" onClick={() => updateActionStatus("cancelled")}>취소 기록</button></>}</div></div> : <div className="action-form"><label>Action 제목 <input value={actionTitle} onChange={(event) => setActionTitle(event.target.value)} maxLength={160} placeholder={actionTitlePlaceholder(opportunity)} /></label><label>예정 시작 <input type="datetime-local" value={actionStartAt} onChange={(event) => setActionStartAt(event.target.value)} /></label><label>예정 종료 (선택) <input type="datetime-local" value={actionEndAt} onChange={(event) => setActionEndAt(event.target.value)} /></label><label>예정 예산 KRW (선택) <input inputMode="decimal" value={actionBudget} onChange={(event) => setActionBudget(event.target.value)} placeholder="0" /></label><label>내부 실행 메모 (선택) <input value={actionNotes} onChange={(event) => setActionNotes(event.target.value)} maxLength={1000} placeholder="외부 발송 내용이나 고객 정보는 입력하지 마세요" /></label><button className="primary" onClick={createAction}>수동 Action 계획 저장</button></div>}{actionMessage && <p className="recommendation-message">{actionMessage}</p>}</article>}
         {action?.status === "completed" && <article className="opportunity-card result-card"><div className="card-title"><div><h2>Result · 실행 결과와 측정</h2><p>실행 메모는 사람이 기록하고, 실제 완료 매출은 저장된 예약 데이터로만 계산합니다.</p></div></div>{actionResult ? <div className="recommendation-body"><span>결과 기록 완료</span><strong>{actionResult.execution_summary}</strong><p>측정 기간 {new Date(actionResult.measurement_start_at).toLocaleString("ko-KR")}–{new Date(actionResult.measurement_end_at).toLocaleString("ko-KR")}{actionResult.actual_spend ? ` · 실제 지출 ${money(actionResult.actual_spend)}` : ""}</p>{measurement && <div className="measurement-summary"><p><b>관찰 실제 완료 매출</b> {money(measurement.observed.actual_revenue)} · 예약 {measurement.observed.appointment_count}건 · 완료 {measurement.observed.completed_count}건</p>{measurement.baseline_average && <p><b>직전 4주 동일 창 평균</b> {money(measurement.baseline_average.actual_revenue)} · 차이 {money(measurement.change_from_baseline?.actual_revenue ?? null)}</p>}<small>{measurement.limitations[0]}</small></div>}</div> : <div className="action-form"><label>실행 요약 <input value={executionSummary} onChange={(event) => setExecutionSummary(event.target.value)} maxLength={1000} placeholder="실제로 수행한 내용을 간단히 기록하세요" /></label><label>측정 시작 <input type="datetime-local" value={measurementStartAt} onChange={(event) => setMeasurementStartAt(event.target.value)} /></label><label>측정 종료 <input type="datetime-local" value={measurementEndAt} onChange={(event) => setMeasurementEndAt(event.target.value)} /></label><label>실제 지출 KRW (선택) <input inputMode="decimal" value={actualSpend} onChange={(event) => setActualSpend(event.target.value)} placeholder="0" /></label><label>결과 메모 (선택) <input value={outcomeNotes} onChange={(event) => setOutcomeNotes(event.target.value)} maxLength={1000} placeholder="고객 개인정보나 외부 채널 원문은 입력하지 마세요" /></label><button className="primary" onClick={recordActionResult}>결과 기록 및 측정</button></div>}{resultMessage && <p className="recommendation-message">{resultMessage}</p>}<p className="safety">✓ 동일 시간대의 단순 비교이며, Action 효과·추가매출·ROI를 단정하지 않습니다.</p></article>}
-        {actionHistory.length > 0 && <article className="opportunity-card action-history-card"><div className="card-title"><div><h2>최근 Action 이력</h2><p>이 사업장에 기록된 수동 실행의 상태입니다.</p></div></div><div className="action-history-list">{actionHistory.slice(0, 5).map((item) => <div key={item.id}><span>상태 · {item.status}</span><strong>{item.title}</strong><small>{new Date(item.planned_start_at).toLocaleString("ko-KR")}{item.planned_budget ? ` · 예정 예산 ${money(item.planned_budget)}` : ""}</small></div>)}</div><p className="safety">✓ 이력은 실행 상태를 보여주며, 성과 인과관계를 의미하지 않습니다.</p></article>}
+        {actionHistory.length > 0 && <article className="opportunity-card action-history-card"><div className="card-title"><div><h2>최근 Action 이력과 측정</h2><p>완료된 Action은 사람이 기록한 결과와 저장된 예약 데이터의 관찰값을 함께 보여줍니다.</p></div></div><div className="action-history-list">{actionHistory.slice(0, 5).map((item) => { const history = actionMeasurementHistory[item.id]; return <div key={item.id}><span>상태 · {item.status}</span><div className="action-history-details"><strong>{item.title}</strong><small>{new Date(item.planned_start_at).toLocaleString("ko-KR")}{item.planned_budget ? ` · 예정 예산 ${money(item.planned_budget)}` : ""}</small>{item.status === "completed" && (history ? <p><b>관찰 실제 완료 매출 {money(history.measurement?.observed.actual_revenue ?? null)}</b>{history.measurement?.baseline_average ? ` · 기준선 대비 ${money(history.measurement.change_from_baseline?.actual_revenue ?? null)}` : " · 기준선 관측 부족"}</p> : <p>결과 기록 대기 · 완료된 Action의 실행 결과와 측정 기간을 입력해 주세요.</p>)}</div></div>; })}</div><p className="safety">✓ 표시된 변화량은 저장된 예약 데이터의 단순 비교이며, Action 효과·추가매출·ROI를 단정하지 않습니다.</p></article>}
         <article className="opportunity-card"><div className="card-title"><div><h2>계산 범위와 한계</h2><p>실제 데이터와 추정치를 혼합하지 않습니다.</p></div></div><ul className="limitations">{[...metrics.limitations, ...(detection?.limitations ?? []), ...(cancellationHotspot?.limitations ?? []), ...(dormantCustomers?.limitations ?? []), ...(serviceDemandGaps?.limitations ?? [])].map((limitation) => <li key={limitation}>{limitation}</li>)}</ul></article>
       </>}
       <footer>ⓘ 실제 완료 매출은 완료된 예약의 결제금액만 합산합니다. 예상 효과는 아직 표시하지 않습니다.</footer>
