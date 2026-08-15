@@ -154,7 +154,7 @@ GET    /api/v1/actions/{actionId}/measurements
 ```
 
 `results`는 완료된 Action에 사람이 기록하는 실행 요약, 측정 기간, 선택적 실제 지출 및 메모다. 실제 매출은 이 입력값으로 받지 않고 저장된 Appointment로만 측정한다.
-`measurements`는 Result의 측정 기간과 같은 길이의 직전 1~4주 창을 baseline으로 사용해 예약·완료·취소·실제 완료 매출의 관찰값과 단순 차이를 반환한다. 이는 인과효과나 Incremental Revenue가 아니다. method version과 limitations를 응답에 포함한다.
+`measurements`는 Result의 측정 기간과 같은 길이의 직전 1~4주 창을 baseline으로 사용해 예약·완료·취소·실제 완료 매출의 관찰값과 단순 차이를 반환한다. `observed`와 `baseline_average`의 건수는 음수가 아니며, `change_from_baseline`은 기준선보다 낮을 때 음수가 될 수 있는 변화량이다. 이는 인과효과나 Incremental Revenue가 아니다. method version과 limitations를 응답에 포함한다.
 
 ---
 

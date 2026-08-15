@@ -23,3 +23,15 @@
 - `hospital_operational_mix_v1.csv`: 취소·노쇼·서비스·시간대 혼합 패턴
 
 세 RevenueGap 견본은 서로 다른 `appointment_id`와 `source_record_id`를 사용한다. 분석 결과가 섞이지 않도록 로컬 검증 시에는 각각 별도 테스트 사업장에 import하는 것을 권장한다.
+
+## 자동 회귀 시뮬레이션
+
+`api/tests/test_sample_pack_product_loop.py`는 세 견본의 기대 Detector 결과를 고정하고, `hospital_operational_mix_v1.csv`로 다음 수동 제품 루프를 시뮬레이션한다.
+
+```text
+CSV parse → Metric rows → Detector → Opportunity refresh
+→ 유형별 Recommendation draft → approved Manual Action
+→ Result record → deterministic Measurement
+```
+
+시뮬레이션은 외부 메시지·광고·쿠폰·가격 변경을 호출하지 않는다. DormantCustomer Recommendation에는 원본 `customer_token`이 포함되지 않는지도 함께 검증한다.

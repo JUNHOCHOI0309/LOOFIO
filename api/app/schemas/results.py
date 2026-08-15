@@ -8,7 +8,7 @@ from app.schemas.metrics import Money
 
 
 RESULT_VERSION = "manual-action-result-v1"
-MEASUREMENT_METHOD_VERSION = "same-window-prior-four-weeks-v1"
+MEASUREMENT_METHOD_VERSION = "same-window-prior-four-weeks-v2"
 
 
 class ActualSpend(BaseModel):
@@ -58,6 +58,16 @@ class MeasurementMetrics(BaseModel):
     actual_revenue: Money
 
 
+class MeasurementDelta(BaseModel):
+    """Signed difference between observed and baseline metrics."""
+
+    appointment_count: float
+    completed_count: float
+    cancelled_count: float
+    no_show_count: float
+    actual_revenue: Money
+
+
 class ActionMeasurement(BaseModel):
     action_id: str
     result_id: str
@@ -66,5 +76,5 @@ class ActionMeasurement(BaseModel):
     baseline_window_count: int = Field(ge=0)
     observed: MeasurementMetrics
     baseline_average: MeasurementMetrics | None = None
-    change_from_baseline: MeasurementMetrics | None = None
+    change_from_baseline: MeasurementDelta | None = None
     limitations: list[str]
