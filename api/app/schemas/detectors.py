@@ -89,3 +89,28 @@ class DormantCustomerDetection(BaseModel):
     completed_customer_count: int = Field(ge=0)
     candidates: list[DormantCustomerCandidate]
     limitations: list[str]
+
+
+class ServiceDemandGapCandidate(BaseModel):
+    offering_name: str = Field(min_length=1)
+    weekday: str
+    slot_start_hour: int = Field(ge=0, le=22)
+    observed_weeks: int = Field(ge=0)
+    offering_appointment_count: int = Field(ge=1)
+    slot_appointment_count: int = Field(ge=1)
+    slot_offering_appointment_count: int = Field(ge=1)
+    business_offering_share: float = Field(ge=0, le=1)
+    slot_offering_share: float = Field(ge=0, le=1)
+    expected_slot_offering_appointment_count: float = Field(ge=0)
+    share_index: float = Field(ge=0)
+
+
+class ServiceDemandGapDetection(BaseModel):
+    detector_version: str
+    minimum_observed_weeks: int = Field(ge=1)
+    observed_weeks: int = Field(ge=0)
+    minimum_offering_appointments: int = Field(ge=1)
+    minimum_slot_appointments: int = Field(ge=1)
+    maximum_share_index: float = Field(gt=0)
+    candidates: list[ServiceDemandGapCandidate]
+    limitations: list[str]
