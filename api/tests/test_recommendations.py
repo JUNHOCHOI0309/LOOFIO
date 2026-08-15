@@ -2,6 +2,7 @@ import base64
 import json
 from datetime import datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from itsdangerous import TimestampSigner
@@ -10,7 +11,9 @@ from app.auth.store import InMemoryAuthStore
 from app.main import app
 from app.metrics.appointments import AppointmentMetricRow
 from app.metrics.store import InMemoryAppointmentMetricStore
+from app.imports.appointments import parse_appointments_csv
 from app.opportunities.low_demand import build_low_demand_opportunity_drafts
+from app.opportunities.other_detectors import build_other_detector_opportunity_drafts
 from app.opportunities.store import InMemoryOpportunityStore
 from app.recommendations.store import InMemoryRecommendationStore
 from app.schemas.auth import AuthenticatedUser
@@ -73,6 +76,37 @@ def test_viewer_cannot_create_recommendation_draft(monkeypatch) -> None:
     assert response.json()["error"]["code"] == "FORBIDDEN"
 
 
+def test_other_detector_recommendations_are_versioned_manual_and_customer_safe(monkeypatch) -> None:
+    client, tenant_id, _ = _authenticated_client_with_opportunity(monkeypatch)
+    rows = _fixture_metric_rows("hospital_operational_mix_v1.csv")
+    opportunities = app.state.opportunity_store.refresh(
+        tenant_id=tenant_id,
+        business_id="business-for-recommendation",
+        drafts=build_other_detector_opportunity_drafts(rows, as_of_date=datetime.fromisoformat("2026-08-15T00:00:00+09:00").date()),
+    )
+    expected = {
+        "CANCELLATION_HOTSPOT": ("cancellation-hotspot-manual-review-v1", "manual_cancellation_flow_review"),
+        "DORMANT_CUSTOMER": ("dormant-customer-manual-review-v1", "manual_revisit_cohort_review"),
+        "SERVICE_DEMAND_GAP": ("service-demand-gap-manual-review-v1", "manual_offering_slot_review"),
+    }
+
+    for opportunity_type, (version, action_type) in expected.items():
+        opportunity = next(item for item in opportunities if item.type == opportunity_type)
+        response = client.post(f"/api/v1/opportunities/{opportunity.id}/recommendations/draft")
+
+        assert response.status_code == 200
+        assert response.json()["version"] == version
+        assert response.json()["action_type"] == action_type
+        assert response.json()["channel"] == "manual"
+        assert response.json()["expected_effect"] is None
+        assert any("외부 실행은 일어나지 않습니다" in limitation for limitation in response.json()["limitations"])
+
+    dormant = next(item for item in opportunities if item.type == "DORMANT_CUSTOMER")
+    dormant_draft = client.post(f"/api/v1/opportunities/{dormant.id}/recommendations/draft").json()
+    assert rows[0].customer_token not in json.dumps(dormant_draft, ensure_ascii=False)
+    assert dormant_draft["target_segment"]["customer_reference"] == "not_included"
+
+
 def _authenticated_client_with_opportunity(monkeypatch):
     auth_store = InMemoryAuthStore()
     user = auth_store.find_or_create_user(AuthenticatedUser(provider="google", provider_subject="recommendation-user"))
@@ -106,6 +140,22 @@ def _twelve_week_demand_rows() -> list[AppointmentMetricRow]:
         rows.extend(AppointmentMetricRow(visit_start_at=day.replace(hour=14), status="completed", paid_amount=Decimal("30000")) for _ in range(4))
         rows.extend(AppointmentMetricRow(visit_start_at=day.replace(hour=16), status="completed", paid_amount=Decimal("30000")) for _ in range(3))
     return rows
+
+
+def _fixture_metric_rows(filename: str) -> list[AppointmentMetricRow]:
+    root = Path(__file__).resolve().parents[2]
+    parsed = parse_appointments_csv((root / "sample-data" / "appointments" / filename).read_bytes())
+    assert not parsed.errors
+    return [
+        AppointmentMetricRow(
+            visit_start_at=row.visit_start_at,
+            status=row.status,
+            paid_amount=row.paid_amount,
+            offering_name=row.offering_name,
+            customer_token=row.customer_token,
+        )
+        for row in parsed.rows
+    ]
 
 
 def _signed_session_cookie(session_id: str) -> str:
