@@ -128,7 +128,7 @@ GET    /api/v1/opportunities/{opportunityId}/recommendations
 POST   /api/v1/recommendations/{recommendationId}/decisions
 ```
 
-`draft`는 저장된 Opportunity의 Observation·Estimate·limitations만 이용해 재현 가능한 Recommendation 초안을 만들거나 기존 초안을 반환한다. 이 요청 및 `approved` 결정은 외부 채널 실행을 만들지 않는다.
+`draft`는 저장된 Opportunity의 Observation·Estimate·limitations만 이용해 재현 가능한 Recommendation 초안을 만들거나 기존 초안을 반환한다. LowDemand·RevenueGap은 수동 시간대 실험 가설을, CancellationHotspot·ServiceDemandGap은 수동 운영 검토를, DormantCustomer는 가명 코호트 수준의 수동 재방문 기록 검토만 제안한다. DormantCustomer Recommendation에는 개별 customer token·연락처·메시지 대상이 포함되지 않는다. 이 요청 및 `approved` 결정은 외부 채널 실행을 만들지 않는다.
 Recommendation 초안과 결정은 `owner`, `admin`, `marketer` 역할만 생성할 수 있으며 `viewer`는 조회만 할 수 있다.
 
 ## Actions
@@ -274,7 +274,7 @@ Expected Effect는 estimate다.
 
 실제 결과는 Action Result/Measurement에서만 반환한다.
 
-현재 LowDemandSlot 초안은 `manual_time_slot_offer_test` / `manual` channel만 제공한다. 대상 고객과 혜택을 설정하거나 외부 채널을 실행하지 않으며, Action에서는 내부 실행 계획과 예정 예산만 기록할 수 있다.
+현재 모든 Recommendation은 `manual` channel만 제공한다. LowDemand·RevenueGap은 `manual_time_slot_offer_test`, CancellationHotspot은 `manual_cancellation_flow_review`, DormantCustomer는 `manual_revisit_cohort_review`, ServiceDemandGap은 `manual_offering_slot_review`를 사용한다. 대상 고객과 혜택을 설정하거나 외부 채널을 실행하지 않으며, Action에서는 내부 실행 계획과 예정 예산만 기록할 수 있다.
 
 ---
 

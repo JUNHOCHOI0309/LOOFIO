@@ -38,7 +38,7 @@ class PostgresRecommendationStore:
                 "ON CONFLICT (opportunity_id, recommendation_version) DO UPDATE SET updated_at = now() "
                 "RETURNING *",
                 (
-                    tenant_id, "low-demand-manual-test-v1", draft.hypothesis, draft.action_type, draft.channel,
+                    tenant_id, draft.version, draft.hypothesis, draft.action_type, draft.channel,
                     Json(draft.target_segment), Json(draft.expected_effect.model_dump()) if draft.expected_effect else None,
                     draft.confidence, draft.explanation, Json(draft.limitations), opportunity_id, tenant_id,
                 ),
@@ -104,12 +104,12 @@ class InMemoryRecommendationStore:
         self.tenants = {}
 
     def create_or_get_draft(self, *, tenant_id: str, opportunity_id: str, draft: RecommendationDraft) -> Recommendation:
-        key = (opportunity_id, "low-demand-manual-test-v1")
+        key = (opportunity_id, draft.version)
         existing_id = self.by_opportunity_version.get(key)
         if existing_id:
             return self.recommendations[existing_id]
         recommendation = Recommendation(
-            id=str(uuid4()), opportunity_id=opportunity_id, version="low-demand-manual-test-v1", status="draft",
+            id=str(uuid4()), opportunity_id=opportunity_id, version=draft.version, status="draft",
             hypothesis=draft.hypothesis, action_type=draft.action_type, channel=draft.channel, target_segment=draft.target_segment,
             expected_effect=draft.expected_effect, confidence=draft.confidence, explanation=draft.explanation,
             limitations=draft.limitations, created_at=datetime.now(timezone.utc),

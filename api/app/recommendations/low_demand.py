@@ -9,6 +9,7 @@ RECOMMENDATION_VERSION = "low-demand-manual-test-v1"
 
 @dataclass(frozen=True)
 class RecommendationDraft:
+    version: str
     hypothesis: str
     action_type: str
     channel: str
@@ -43,6 +44,7 @@ def build_low_demand_recommendation_draft(opportunity: Opportunity) -> Recommend
         "승인만으로 고객 메시지, 광고, 쿠폰, 가격 변경 등 외부 실행은 일어나지 않습니다.",
     ]
     return RecommendationDraft(
+        version=RECOMMENDATION_VERSION,
         hypothesis=(
             f"{weekday} {start_hour:02d}:00–{end_hour:02d}:00 슬롯에 한정된 수동 프로모션을 작게 검토하면 "
             "해당 슬롯의 예약 수요 변화를 측정할 수 있습니다."

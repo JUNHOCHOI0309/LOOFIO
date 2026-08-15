@@ -8,7 +8,7 @@ from app.metrics.store import MetricBusinessNotFound, MetricStoreUnavailable
 from app.opportunities.low_demand import build_low_demand_opportunity_drafts
 from app.opportunities.other_detectors import build_other_detector_opportunity_drafts
 from app.opportunities.store import OpportunityBusinessNotFound, OpportunityStoreUnavailable
-from app.recommendations.low_demand import build_low_demand_recommendation_draft
+from app.recommendations.manual import build_manual_recommendation_draft
 from app.recommendations.store import RecommendationNotFound, RecommendationStoreUnavailable
 from app.schemas.opportunities import Opportunity, OpportunityRefreshResult
 from app.schemas.recommendations import Recommendation, RecommendationDecisionRequest
@@ -70,7 +70,7 @@ async def create_recommendation_draft(opportunity_id: str, request: Request) -> 
         return request.app.state.recommendation_store.create_or_get_draft(
             tenant_id=user.active_tenant_id,
             opportunity_id=opportunity.id,
-            draft=build_low_demand_recommendation_draft(opportunity),
+            draft=build_manual_recommendation_draft(opportunity),
         )
     except OpportunityBusinessNotFound as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"code": "NOT_FOUND", "message": str(error)}) from error
