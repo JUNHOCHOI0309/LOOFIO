@@ -123,9 +123,13 @@ Recommendation 초안과 결정은 `owner`, `admin`, `marketer` 역할만 생성
 
 ```text
 POST   /api/v1/recommendations/{recommendationId}/actions
+GET    /api/v1/recommendations/{recommendationId}/actions
 GET    /api/v1/actions/{actionId}
 PATCH  /api/v1/actions/{actionId}
 ```
+
+Action은 `approved` Recommendation에서만 생성한다. 현재 구현은 사람이 수행할 `manual` Action 계획과 상태 이력만 저장하며, 고객 메시지·광고·쿠폰·외부 채널을 호출하지 않는다.
+Action 상태는 `planned → in_progress → completed` 또는 `planned/in_progress → cancelled`로만 변경할 수 있다. 완료·취소 상태는 다시 열 수 없으며, 상태 변경은 actor와 메모를 포함한 이력으로 보관한다.
 
 ## Measurements
 
