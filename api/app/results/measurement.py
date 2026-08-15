@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from app.metrics.appointments import AppointmentMetricRow, calculate_appointment_metrics
 from app.schemas.metrics import Money
-from app.schemas.results import ActionMeasurement, MeasurementMetrics
+from app.schemas.results import ActionMeasurement, MeasurementDelta, MeasurementMetrics
 
 
 def calculate_action_measurement(*, action_id: str, result_id: str, observation_rows: list[AppointmentMetricRow], baseline_rows: list[list[AppointmentMetricRow]], start_at, end_at) -> ActionMeasurement:
@@ -45,8 +45,8 @@ def _average(values: list[MeasurementMetrics]) -> MeasurementMetrics:
     )
 
 
-def _difference(observed: MeasurementMetrics, baseline: MeasurementMetrics) -> MeasurementMetrics:
-    return MeasurementMetrics(
+def _difference(observed: MeasurementMetrics, baseline: MeasurementMetrics) -> MeasurementDelta:
+    return MeasurementDelta(
         appointment_count=round(observed.appointment_count - baseline.appointment_count, 2),
         completed_count=round(observed.completed_count - baseline.completed_count, 2),
         cancelled_count=round(observed.cancelled_count - baseline.cancelled_count, 2),
