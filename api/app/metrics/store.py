@@ -54,13 +54,16 @@ class PostgresAppointmentMetricStore:
                 clauses.append("a.visit_start_at <= %s")
                 parameters.append(end_at)
             cursor.execute(
-                "SELECT a.visit_start_at AT TIME ZONE %s AS local_visit_start_at, a.status, a.paid_amount "
+                "SELECT a.visit_start_at AT TIME ZONE %s AS local_visit_start_at, a.status, a.paid_amount, a.offering_name "
                 "FROM appointments a WHERE " + " AND ".join(clauses) + " ORDER BY a.visit_start_at ASC",
                 [business["timezone"], *parameters],
             )
             return [
                 AppointmentMetricRow(
-                    visit_start_at=row["local_visit_start_at"], status=row["status"], paid_amount=_decimal_or_none(row["paid_amount"])
+                    visit_start_at=row["local_visit_start_at"],
+                    status=row["status"],
+                    paid_amount=_decimal_or_none(row["paid_amount"]),
+                    offering_name=row["offering_name"],
                 )
                 for row in cursor.fetchall()
             ]

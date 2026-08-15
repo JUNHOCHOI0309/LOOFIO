@@ -40,3 +40,29 @@ class RevenueGapDetection(BaseModel):
     observed_weeks: int = Field(ge=0)
     candidates: list[RevenueGapCandidate]
     limitations: list[str]
+
+
+class CancellationHotspotCandidate(BaseModel):
+    weekday: str
+    slot_start_hour: int = Field(ge=0, le=22)
+    offering_name: str = Field(min_length=1)
+    observed_weeks: int = Field(ge=0)
+    appointment_count: int = Field(ge=1)
+    cancelled_count: int = Field(ge=0)
+    no_show_count: int = Field(ge=0)
+    disruption_count: int = Field(ge=0)
+    disruption_rate: float = Field(ge=0, le=1)
+    baseline_disruption_rate: float = Field(ge=0, le=1)
+    rate_multiple: float = Field(ge=0)
+
+
+class CancellationHotspotDetection(BaseModel):
+    detector_version: str
+    minimum_appointment_samples: int = Field(ge=1)
+    minimum_baseline_multiple: float = Field(gt=0)
+    observed_weeks: int = Field(ge=0)
+    baseline_appointment_count: int = Field(ge=0)
+    baseline_disruption_count: int = Field(ge=0)
+    baseline_disruption_rate: float = Field(ge=0, le=1)
+    candidates: list[CancellationHotspotCandidate]
+    limitations: list[str]
