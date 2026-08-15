@@ -95,6 +95,7 @@ GET    /api/v1/businesses/{businessId}/metrics/appointments
 GET    /api/v1/businesses/{businessId}/detectors/low-demand-slots
 GET    /api/v1/businesses/{businessId}/detectors/revenue-gaps
 GET    /api/v1/businesses/{businessId}/detectors/cancellation-hotspots
+GET    /api/v1/businesses/{businessId}/detectors/dormant-customers?as_of_date=YYYY-MM-DD
 ```
 
 LowDemandSlot은 같은 요일의 관측된 2시간 슬롯과 비교해 상대 예약 수요가 낮은 후보를 반환한다.
@@ -103,6 +104,8 @@ LowDemandSlot은 같은 요일의 관측된 2시간 슬롯과 비교해 상대 �
 RevenueGap은 LowDemandSlot 후보의 주간 예약 격차를 같은 요일 비교 시간대의 완료 결제금액 표본으로 환산한다. 완료 결제 표본이 최소 5건인 경우에만 50~100% 회복 시나리오의 월간 범위를 반환한다. 이 값은 Estimate이며 실제 손실·보장 매출·인과효과·ROI가 아니다. capacity 데이터가 없으므로 Capacity Gap을 계산하지 않는다.
 
 CancellationHotspot은 요일·2시간 슬롯·Offering 조합에서 `cancelled + no_show` 예약 이탈률이 사업장 전체 이탈률의 1.5배 이상인 Observation 후보를 반환한다. 해당 조합의 예약 표본은 최소 15건이어야 한다. 결과는 원인, 고객 의도, 실제 손실, Recommendation이나 외부 실행을 뜻하지 않는다.
+
+DormantCustomer는 필수 `as_of_date` 기준으로 가명 customer token의 마지막 완료 방문 이후 경과일을 계산한다. 개인 방문 간격을 우선하고, 표본이 부족하면 동일 Offering 고객군, 그다음 사업장 전체 고객군의 중앙 재방문 간격을 사용한다. 경과일이 해당 기준의 1.3배 이상이면 재방문 지연 Observation 후보로 반환한다. 이는 이탈·고객 의도·실제 손실을 뜻하지 않으며, 원문 연락처나 고객 메시지·외부 실행을 포함하지 않는다.
 
 ## Opportunities
 
