@@ -21,3 +21,5 @@
 - `hospital_revenue_gap_positive_v1.csv`: RevenueGap이 검출되는 12주 이상 패턴
 - `hospital_revenue_gap_sparse_payment_v1.csv`: 결제 표본 부족 처리 검증
 - `hospital_operational_mix_v1.csv`: 취소·노쇼·서비스·시간대 혼합 패턴
+
+세 RevenueGap 견본은 서로 다른 `appointment_id`와 `source_record_id`를 사용한다. 분석 결과가 섞이지 않도록 로컬 검증 시에는 각각 별도 테스트 사업장에 import하는 것을 권장한다.

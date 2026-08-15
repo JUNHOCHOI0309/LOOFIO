@@ -2,7 +2,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 
-from app.analytics.detectors.low_demand_slots import DETECTOR_VERSION
+from app.opportunities.low_demand import OPPORTUNITY_DETECTOR_VERSION
 from app.api.dependencies import require_active_tenant_user
 from app.metrics.store import MetricBusinessNotFound, MetricStoreUnavailable
 from app.opportunities.low_demand import build_low_demand_opportunity_drafts
@@ -37,7 +37,7 @@ async def refresh_low_demand_opportunities(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"code": "NOT_FOUND", "message": str(error)}) from error
     except (MetricStoreUnavailable, OpportunityStoreUnavailable) as error:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"code": "OPPORTUNITY_STORAGE_UNAVAILABLE", "message": str(error)}) from error
-    return OpportunityRefreshResult(detector_version=DETECTOR_VERSION, refreshed_count=len(opportunities), opportunities=opportunities)
+    return OpportunityRefreshResult(detector_version=OPPORTUNITY_DETECTOR_VERSION, refreshed_count=len(opportunities), opportunities=opportunities)
 
 
 @router.get("/businesses/{business_id}/opportunities", response_model=list[Opportunity])
