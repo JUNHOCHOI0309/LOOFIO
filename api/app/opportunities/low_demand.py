@@ -14,6 +14,7 @@ OPPORTUNITY_DETECTOR_VERSION = "low-demand-revenue-gap-v2"
 
 @dataclass(frozen=True)
 class OpportunityDraft:
+    opportunity_type: str
     detector_code: str
     detector_version: str
     natural_key: str
@@ -58,6 +59,7 @@ def build_low_demand_opportunity_drafts(rows: list[AppointmentMetricRow]) -> lis
             evidence.append(("REVENUE_GAP_BENCHMARK", revenue_gap.model_dump(mode="json")))
         drafts.append(
             OpportunityDraft(
+                opportunity_type="LOW_DEMAND_SLOT",
                 detector_code=OPPORTUNITY_DETECTOR_CODE,
                 detector_version=OPPORTUNITY_DETECTOR_VERSION,
                 natural_key=f"{candidate.weekday}:{candidate.slot_start_hour}",

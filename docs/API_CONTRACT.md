@@ -117,7 +117,7 @@ POST   /api/v1/businesses/{businessId}/opportunities/refresh
 GET    /api/v1/businesses/{businessId}/opportunities
 ```
 
-`refresh`는 LowDemandSlot 후보를 tenant/business 범위의 Opportunity로 생성하거나 갱신한다. 현재 `low-demand-revenue-gap-v2`는 예약 수요 Observation과 같은 요일 비교 시간대의 RevenueGap Estimate를 결합한다. 과거 `low-demand-slot-v1` Opportunity는 재해석하지 않고 보존한다. 응답은 Observation, 가정 기반 Estimate, limitations, detector version, score, confidence를 분리한다.
+`refresh`는 tenant/business 범위의 Detector 후보를 Opportunity로 생성하거나 갱신한다. 현재 `low-demand-revenue-gap-v2`는 예약 수요 Observation과 같은 요일 비교 시간대의 RevenueGap Estimate를 결합한다. `cancellation-hotspot-v1`과 `service-demand-gap-v1`은 Observation 전용 Opportunity로 함께 갱신된다. `as_of_date`를 명시하면 `dormant-customer-v1`도 갱신된다. 과거 `low-demand-slot-v1` Opportunity는 재해석하지 않고 보존한다. 응답은 Observation, 가정 기반 Estimate, limitations, detector version, score, confidence를 분리한다.
 Estimate는 실제 매출이나 보장값이 아니며, `Recommendation`이나 외부 실행을 포함하지 않는다.
 
 ## Recommendations

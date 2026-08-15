@@ -22,6 +22,7 @@ class OpportunityBusinessNotFound(RuntimeError):
 
 
 class OpportunityStore(Protocol):
+    def refresh(self, *, tenant_id: str, business_id: str, drafts: list[OpportunityDraft]) -> list[Opportunity]: ...
     def refresh_low_demand(self, *, tenant_id: str, business_id: str, drafts: list[OpportunityDraft]) -> list[Opportunity]: ...
     def list_opportunities(self, *, tenant_id: str, business_id: str) -> list[Opportunity]: ...
     def get_opportunity(self, *, tenant_id: str, opportunity_id: str) -> Opportunity: ...
@@ -31,20 +32,20 @@ class PostgresOpportunityStore:
     def __init__(self, database_url: str | None) -> None:
         self.database_url = database_url
 
-    def refresh_low_demand(self, *, tenant_id: str, business_id: str, drafts: list[OpportunityDraft]) -> list[Opportunity]:
+    def refresh(self, *, tenant_id: str, business_id: str, drafts: list[OpportunityDraft]) -> list[Opportunity]:
         with self._connection() as connection, connection.cursor(row_factory=dict_row) as cursor:
             self._assert_business(cursor, tenant_id, business_id)
             refreshed: list[Opportunity] = []
             for draft in drafts:
                 cursor.execute(
                     "INSERT INTO opportunities (tenant_id, business_id, opportunity_type, detector_code, detector_version, natural_key, segment, observation, estimate, score, confidence, limitations) "
-                    "VALUES (%s, %s, 'LOW_DEMAND_SLOT', %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                     "ON CONFLICT (tenant_id, business_id, detector_code, detector_version, natural_key) DO UPDATE SET "
                     "segment = EXCLUDED.segment, observation = EXCLUDED.observation, estimate = EXCLUDED.estimate, score = EXCLUDED.score, confidence = EXCLUDED.confidence, limitations = EXCLUDED.limitations, "
                     "last_detected_at = now(), updated_at = now() WHERE opportunities.status = 'open' "
                     "RETURNING *",
                     (
-                        tenant_id, business_id, draft.detector_code, draft.detector_version, draft.natural_key, Json(draft.segment), Json(draft.observation.model_dump()),
+                        tenant_id, business_id, draft.opportunity_type, draft.detector_code, draft.detector_version, draft.natural_key, Json(draft.segment), Json(draft.observation.model_dump()),
                         Json(draft.estimate.model_dump()) if draft.estimate else None, draft.score, draft.confidence, Json(draft.limitations),
                     ),
                 )
@@ -68,6 +69,9 @@ class PostgresOpportunityStore:
                         (opportunity.id, evidence_hash, evidence_type, Json(payload)),
                     )
         return refreshed
+
+    def refresh_low_demand(self, *, tenant_id: str, business_id: str, drafts: list[OpportunityDraft]) -> list[Opportunity]:
+        return self.refresh(tenant_id=tenant_id, business_id=business_id, drafts=drafts)
 
     def list_opportunities(self, *, tenant_id: str, business_id: str) -> list[Opportunity]:
         with self._connection() as connection, connection.cursor(row_factory=dict_row) as cursor:
@@ -110,14 +114,14 @@ class InMemoryOpportunityStore:
     def __init__(self) -> None:
         self.opportunities = {}
 
-    def refresh_low_demand(self, *, tenant_id: str, business_id: str, drafts: list[OpportunityDraft]) -> list[Opportunity]:
+    def refresh(self, *, tenant_id: str, business_id: str, drafts: list[OpportunityDraft]) -> list[Opportunity]:
         now = datetime.now(timezone.utc)
         results: list[Opportunity] = []
         for draft in drafts:
             key = (tenant_id, business_id, draft.detector_code, draft.detector_version, draft.natural_key)
             existing = self.opportunities.get(key)
             opportunity = Opportunity(
-                id=existing.id if existing else str(uuid4()), type="LOW_DEMAND_SLOT", status=existing.status if existing else "open",
+                id=existing.id if existing else str(uuid4()), type=draft.opportunity_type, status=existing.status if existing else "open",
                 segment=draft.segment, observation=draft.observation, estimate=draft.estimate, score=draft.score, confidence=draft.confidence,
                 limitations=draft.limitations, detector=OpportunityDetector(code=draft.detector_code, version=draft.detector_version),
                 first_detected_at=existing.first_detected_at if existing else now, last_detected_at=now,
@@ -126,6 +130,9 @@ class InMemoryOpportunityStore:
                 self.opportunities[key] = opportunity
             results.append(self.opportunities.get(key, opportunity))
         return results
+
+    def refresh_low_demand(self, *, tenant_id: str, business_id: str, drafts: list[OpportunityDraft]) -> list[Opportunity]:
+        return self.refresh(tenant_id=tenant_id, business_id=business_id, drafts=drafts)
 
     def list_opportunities(self, *, tenant_id: str, business_id: str) -> list[Opportunity]:
         return sorted(

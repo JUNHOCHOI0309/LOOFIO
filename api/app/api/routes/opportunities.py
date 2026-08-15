@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 
@@ -6,6 +6,7 @@ from app.opportunities.low_demand import OPPORTUNITY_DETECTOR_VERSION
 from app.api.dependencies import require_active_tenant_user
 from app.metrics.store import MetricBusinessNotFound, MetricStoreUnavailable
 from app.opportunities.low_demand import build_low_demand_opportunity_drafts
+from app.opportunities.other_detectors import build_other_detector_opportunity_drafts
 from app.opportunities.store import OpportunityBusinessNotFound, OpportunityStoreUnavailable
 from app.recommendations.low_demand import build_low_demand_recommendation_draft
 from app.recommendations.store import RecommendationNotFound, RecommendationStoreUnavailable
@@ -21,6 +22,7 @@ async def refresh_low_demand_opportunities(
     request: Request,
     start_at: datetime | None = Query(default=None),
     end_at: datetime | None = Query(default=None),
+    as_of_date: date | None = Query(default=None),
 ) -> OpportunityRefreshResult:
     user = require_active_tenant_user(request)
     _validate_range(start_at, end_at)
@@ -28,16 +30,22 @@ async def refresh_low_demand_opportunities(
         rows = request.app.state.metric_store.read_appointments(
             tenant_id=user.active_tenant_id, business_id=business_id, start_at=start_at, end_at=end_at
         )
-        opportunities = request.app.state.opportunity_store.refresh_low_demand(
+        drafts = [*build_low_demand_opportunity_drafts(rows), *build_other_detector_opportunity_drafts(rows, as_of_date=as_of_date)]
+        opportunities = request.app.state.opportunity_store.refresh(
             tenant_id=user.active_tenant_id,
             business_id=business_id,
-            drafts=build_low_demand_opportunity_drafts(rows),
+            drafts=drafts,
         )
     except (MetricBusinessNotFound, OpportunityBusinessNotFound) as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"code": "NOT_FOUND", "message": str(error)}) from error
     except (MetricStoreUnavailable, OpportunityStoreUnavailable) as error:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"code": "OPPORTUNITY_STORAGE_UNAVAILABLE", "message": str(error)}) from error
-    return OpportunityRefreshResult(detector_version=OPPORTUNITY_DETECTOR_VERSION, refreshed_count=len(opportunities), opportunities=opportunities)
+    return OpportunityRefreshResult(
+        detector_version=OPPORTUNITY_DETECTOR_VERSION,
+        refreshed_count=len(opportunities),
+        opportunities=opportunities,
+        refreshed_detector_versions=sorted({opportunity.detector.version for opportunity in opportunities}),
+    )
 
 
 @router.get("/businesses/{business_id}/opportunities", response_model=list[Opportunity])
