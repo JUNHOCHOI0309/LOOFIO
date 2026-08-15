@@ -6,9 +6,10 @@ from app.analytics.detectors.cancellation_hotspots import detect_cancellation_ho
 from app.analytics.detectors.dormant_customers import detect_dormant_customers
 from app.analytics.detectors.low_demand_slots import detect_low_demand_slots
 from app.analytics.detectors.revenue_gap import detect_revenue_gaps
+from app.analytics.detectors.service_demand_gaps import detect_service_demand_gaps
 from app.api.dependencies import require_active_tenant_user
 from app.metrics.store import MetricBusinessNotFound, MetricStoreUnavailable
-from app.schemas.detectors import CancellationHotspotDetection, DormantCustomerDetection, LowDemandSlotDetection, RevenueGapDetection
+from app.schemas.detectors import CancellationHotspotDetection, DormantCustomerDetection, LowDemandSlotDetection, RevenueGapDetection, ServiceDemandGapDetection
 
 router = APIRouter(tags=["detectors"])
 
@@ -98,3 +99,26 @@ async def get_dormant_customer_candidates(
     except MetricStoreUnavailable as error:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"code": "METRIC_STORAGE_UNAVAILABLE", "message": str(error)}) from error
     return detect_dormant_customers(rows, as_of_date=as_of_date)
+
+
+@router.get("/businesses/{business_id}/detectors/service-demand-gaps", response_model=ServiceDemandGapDetection)
+async def get_service_demand_gap_candidates(
+    business_id: str,
+    request: Request,
+    start_at: datetime | None = Query(default=None),
+    end_at: datetime | None = Query(default=None),
+) -> ServiceDemandGapDetection:
+    user = require_active_tenant_user(request)
+    if (start_at and start_at.tzinfo is None) or (end_at and end_at.tzinfo is None):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"code": "VALIDATION_ERROR", "message": "기간은 UTC offset을 포함해야 합니다."})
+    if start_at and end_at and end_at < start_at:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"code": "VALIDATION_ERROR", "message": "종료 시점은 시작 시점 이후여야 합니다."})
+    try:
+        rows = request.app.state.metric_store.read_appointments(
+            tenant_id=user.active_tenant_id, business_id=business_id, start_at=start_at, end_at=end_at
+        )
+    except MetricBusinessNotFound as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"code": "NOT_FOUND", "message": str(error)}) from error
+    except MetricStoreUnavailable as error:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"code": "METRIC_STORAGE_UNAVAILABLE", "message": str(error)}) from error
+    return detect_service_demand_gaps(rows)
