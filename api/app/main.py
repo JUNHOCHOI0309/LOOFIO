@@ -8,12 +8,14 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.errors import http_exception_handler, request_validation_exception_handler
 from app.api.routes.auth import router as auth_router
+from app.api.routes.actions import router as actions_router
 from app.api.routes.businesses import router as businesses_router
 from app.api.routes.detectors import router as detectors_router
 from app.api.routes.imports import router as imports_router
 from app.api.routes.metrics import router as metrics_router
 from app.api.routes.opportunities import router as opportunities_router
 from app.auth.store import PostgresAuthStore
+from app.actions.store import PostgresActionStore
 from app.imports.store import PostgresAppointmentImportStore
 from app.metrics.store import PostgresAppointmentMetricStore
 from app.opportunities.store import PostgresOpportunityStore
@@ -29,6 +31,7 @@ app.state.import_store = PostgresAppointmentImportStore(os.getenv("DATABASE_URL"
 app.state.metric_store = PostgresAppointmentMetricStore(os.getenv("DATABASE_URL"))
 app.state.opportunity_store = PostgresOpportunityStore(os.getenv("DATABASE_URL"))
 app.state.recommendation_store = PostgresRecommendationStore(os.getenv("DATABASE_URL"))
+app.state.action_store = PostgresActionStore(os.getenv("DATABASE_URL"))
 
 configured_session_secret = os.getenv("SESSION_SECRET")
 secure_session_cookie = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
@@ -48,6 +51,7 @@ app.add_middleware(
 app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
 app.add_exception_handler(HTTPException, http_exception_handler)
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(actions_router, prefix="/api/v1")
 app.include_router(businesses_router, prefix="/api/v1")
 app.include_router(detectors_router, prefix="/api/v1")
 app.include_router(imports_router, prefix="/api/v1")
