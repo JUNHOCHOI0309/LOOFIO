@@ -44,6 +44,7 @@ class ActionInvalidTransition(RuntimeError):
 class ActionStore(Protocol):
     def create_or_get_manual_action(self, *, tenant_id: str, recommendation_id: str, user_id: str, payload: CreateManualActionRequest) -> ActionCreateResult: ...
     def list_for_recommendation(self, *, tenant_id: str, recommendation_id: str) -> list[Action]: ...
+    def list_for_business(self, *, tenant_id: str, business_id: str) -> list[Action]: ...
     def get_action(self, *, tenant_id: str, action_id: str) -> Action: ...
     def update_status(self, *, tenant_id: str, action_id: str, user_id: str, payload: UpdateActionStatusRequest) -> Action: ...
 
@@ -95,6 +96,17 @@ class PostgresActionStore:
             cursor.execute(
                 "SELECT * FROM actions WHERE tenant_id = %s AND recommendation_id = %s ORDER BY created_at ASC",
                 (tenant_id, recommendation_id),
+            )
+            return [self._action_with_events(cursor, row) for row in cursor.fetchall()]
+
+    def list_for_business(self, *, tenant_id: str, business_id: str) -> list[Action]:
+        with self._connection() as connection, connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute("SELECT id FROM businesses WHERE id = %s AND tenant_id = %s", (business_id, tenant_id))
+            if not cursor.fetchone():
+                raise ActionNotFound("해당 병원에 접근할 수 없습니다.")
+            cursor.execute(
+                "SELECT * FROM actions WHERE tenant_id = %s AND business_id = %s ORDER BY COALESCE(completed_at, started_at, planned_start_at) DESC, created_at DESC",
+                (tenant_id, business_id),
             )
             return [self._action_with_events(cursor, row) for row in cursor.fetchall()]
 
@@ -151,6 +163,8 @@ class InMemoryActionStore:
     tenant_by_action: dict[str, str]
     recommendation_statuses: dict[str, str]
     recommendation_types: dict[str, tuple[str, str]]
+    recommendation_businesses: dict[str, str]
+    businesses: set[tuple[str, str]]
     tenant_by_recommendation: dict[str, str]
 
     def __init__(self) -> None:
@@ -159,11 +173,15 @@ class InMemoryActionStore:
         self.tenant_by_action = {}
         self.recommendation_statuses = {}
         self.recommendation_types = {}
+        self.recommendation_businesses = {}
+        self.businesses = set()
         self.tenant_by_recommendation = {}
 
-    def register_recommendation(self, *, tenant_id: str, recommendation_id: str, status: str, action_type: str, channel: str) -> None:
+    def register_recommendation(self, *, tenant_id: str, recommendation_id: str, status: str, action_type: str, channel: str, business_id: str = "business-default") -> None:
         self.recommendation_statuses[recommendation_id] = status
         self.recommendation_types[recommendation_id] = (action_type, channel)
+        self.recommendation_businesses[recommendation_id] = business_id
+        self.businesses.add((tenant_id, business_id))
         self.tenant_by_recommendation[recommendation_id] = tenant_id
 
     def create_or_get_manual_action(self, *, tenant_id: str, recommendation_id: str, user_id: str, payload: CreateManualActionRequest) -> ActionCreateResult:
@@ -179,7 +197,7 @@ class InMemoryActionStore:
         action_type, channel = self.recommendation_types[recommendation_id]
         event = ActionStatusEvent(id=str(uuid4()), status="planned", changed_by_user_id=user_id, created_at=now)
         action = Action(
-            id=str(uuid4()), business_id="business-default", recommendation_id=recommendation_id, version=ACTION_VERSION, status="planned", action_type=action_type,
+            id=str(uuid4()), business_id=self.recommendation_businesses[recommendation_id], recommendation_id=recommendation_id, version=ACTION_VERSION, status="planned", action_type=action_type,
             channel=channel, title=payload.title.strip(), execution_notes=payload.execution_notes, planned_start_at=payload.planned_start_at,
             planned_end_at=payload.planned_end_at, planned_budget=payload.planned_budget, created_by_user_id=user_id,
             created_at=now, updated_at=now, status_events=[event],
@@ -191,6 +209,15 @@ class InMemoryActionStore:
 
     def list_for_recommendation(self, *, tenant_id: str, recommendation_id: str) -> list[Action]:
         return [item for item in self.actions.values() if item.recommendation_id == recommendation_id and self.tenant_by_action[item.id] == tenant_id]
+
+    def list_for_business(self, *, tenant_id: str, business_id: str) -> list[Action]:
+        if (tenant_id, business_id) not in self.businesses:
+            raise ActionNotFound("해당 병원에 접근할 수 없습니다.")
+        return sorted(
+            [item for item in self.actions.values() if item.business_id == business_id and self.tenant_by_action[item.id] == tenant_id],
+            key=lambda item: (item.completed_at or item.started_at or item.planned_start_at, item.created_at),
+            reverse=True,
+        )
 
     def get_action(self, *, tenant_id: str, action_id: str) -> Action:
         action = self.actions.get(action_id)
