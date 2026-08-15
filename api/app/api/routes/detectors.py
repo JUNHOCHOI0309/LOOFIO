@@ -1,13 +1,14 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 
 from app.analytics.detectors.cancellation_hotspots import detect_cancellation_hotspots
+from app.analytics.detectors.dormant_customers import detect_dormant_customers
 from app.analytics.detectors.low_demand_slots import detect_low_demand_slots
 from app.analytics.detectors.revenue_gap import detect_revenue_gaps
 from app.api.dependencies import require_active_tenant_user
 from app.metrics.store import MetricBusinessNotFound, MetricStoreUnavailable
-from app.schemas.detectors import CancellationHotspotDetection, LowDemandSlotDetection, RevenueGapDetection
+from app.schemas.detectors import CancellationHotspotDetection, DormantCustomerDetection, LowDemandSlotDetection, RevenueGapDetection
 
 router = APIRouter(tags=["detectors"])
 
@@ -79,3 +80,21 @@ async def get_cancellation_hotspot_candidates(
     except MetricStoreUnavailable as error:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"code": "METRIC_STORAGE_UNAVAILABLE", "message": str(error)}) from error
     return detect_cancellation_hotspots(rows)
+
+
+@router.get("/businesses/{business_id}/detectors/dormant-customers", response_model=DormantCustomerDetection)
+async def get_dormant_customer_candidates(
+    business_id: str,
+    request: Request,
+    as_of_date: date = Query(...),
+) -> DormantCustomerDetection:
+    user = require_active_tenant_user(request)
+    try:
+        rows = request.app.state.metric_store.read_appointments(
+            tenant_id=user.active_tenant_id, business_id=business_id, start_at=None, end_at=None
+        )
+    except MetricBusinessNotFound as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"code": "NOT_FOUND", "message": str(error)}) from error
+    except MetricStoreUnavailable as error:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"code": "METRIC_STORAGE_UNAVAILABLE", "message": str(error)}) from error
+    return detect_dormant_customers(rows, as_of_date=as_of_date)

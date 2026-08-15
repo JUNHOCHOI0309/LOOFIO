@@ -1,3 +1,5 @@
+from datetime import date
+
 from pydantic import BaseModel, Field
 
 from app.schemas.metrics import Money
@@ -65,4 +67,25 @@ class CancellationHotspotDetection(BaseModel):
     baseline_disruption_count: int = Field(ge=0)
     baseline_disruption_rate: float = Field(ge=0, le=1)
     candidates: list[CancellationHotspotCandidate]
+    limitations: list[str]
+
+
+class DormantCustomerCandidate(BaseModel):
+    customer_token: str = Field(min_length=16)
+    latest_offering_name: str | None = None
+    completed_visit_count: int = Field(ge=1)
+    last_completed_visit_date: date
+    days_since_last_completed_visit: int = Field(ge=0)
+    expected_revisit_days: float = Field(gt=0)
+    overdue_ratio: float = Field(ge=0)
+    baseline_source: str
+    reference_interval_count: int = Field(ge=1)
+
+
+class DormantCustomerDetection(BaseModel):
+    detector_version: str
+    as_of_date: date
+    minimum_overdue_ratio: float = Field(gt=0)
+    completed_customer_count: int = Field(ge=0)
+    candidates: list[DormantCustomerCandidate]
     limitations: list[str]
