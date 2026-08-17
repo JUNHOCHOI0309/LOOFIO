@@ -11,6 +11,21 @@ LOOFIO의 핵심 목표는 소상공인이 보유한 예약·매출·고객 데�
 
 > **AI가 기회를 임의로 만들어내는 것이 아니라, 코드가 데이터에서 기회를 탐지하고 AI는 이를 설명한다.**
 
+## 1.1 현재 구현 상태
+
+2026-08-17 현재 이 문서의 MVP Phase 1~3 중 다음 항목을 구현했다.
+
+- CSV inspect/preview/import와 병원별 column/status mapping
+- Appointment 정규화와 tenant/business scoped persistence
+- Appointment Metric Engine과 요일×2시간 단위 집계
+- LowDemandSlot, RevenueGap, CancellationHotspot, DormantCustomer, ServiceDemandGap
+- Detector version·evidence·limitations를 가진 Opportunity persistence
+- `Impact 35 / Confidence 30 / Persistence 20 / Actionability 15`의 `opportunity-score-v1`
+- 유형별 manual Recommendation, 사용자 결정, Action, Result, baseline Measurement
+- 4개 sample CSV 기반 end-to-end 회귀 테스트
+
+아직 구현하지 않은 것은 실제 LLM 설명·추천, External Context, 외부 채널 실행, 인과 추론이다. 현재 Recommendation은 structured deterministic template이며 AI 결과가 아니다. 상세 상태는 `CURRENT_IMPLEMENTATION_STATUS.md`, 데이터 모델은 `LOOFIO_DATA_SCHEMA_V1.md`를 따른다.
+
 ---
 
 # 2. 제품 핵심 방향
@@ -943,9 +958,11 @@ LLM은 다음 세 역할만 담당한다.
 
 ---
 
-# 31. MVP 구현 우선순위
+# 31. MVP 구현 우선순위와 현재 상태
 
 ## Phase 1
+
+상태: CSV 기준 구현 완료, Excel parser는 미구현
 
 ```text
 Normalization
@@ -959,7 +976,7 @@ RevenueGap
 
 목표:
 
-- Excel/CSV 업로드
+- CSV 업로드 구현, Excel 업로드는 후속 범위
 - 컬럼 매핑
 - 예약 데이터 정규화
 - 시간대별 수요 계산
@@ -968,12 +985,16 @@ RevenueGap
 
 ## Phase 2
 
+상태: Detector·Opportunity·manual Recommendation 구현 완료
+
 ```text
 CancellationHotspot
 DormantCustomer
 ```
 
 ## Phase 3
+
+상태: ServiceDemandGap과 Opportunity Score 구현 완료, 실제 AI Recommendation은 미구현
 
 ```text
 ServiceDemandGap
@@ -987,7 +1008,8 @@ AI Recommendation
 
 테스트용 실제 또는 샘플 사업장 데이터를 입력했을 때:
 
-- 예약 Excel/CSV 업로드 성공
+- 예약 CSV 업로드 성공: 충족
+- 예약 Excel 업로드 성공: 미구현
 - 주요 컬럼 자동 매핑
 - 최소 8~12주 지표 생성
 - 최소 1개의 Opportunity 탐지
@@ -1001,52 +1023,33 @@ AI Recommendation
 
 # 33. 권장 백엔드 모듈 구조
 
-향후 실제 구현 시 다음 형태를 기준으로 한다.
+현재 구현은 아래 논리 구조를 `api/app` 내부 feature package로 구체화했다.
 
 ```text
-/database
-/import
-/normalization
+/imports
 /metrics
-/detectors
-/scoring
-/ai
+/analytics/detectors
+/analytics/scoring
+/opportunities
+/recommendations
+/actions
+/results
 ```
 
 예:
 
 ```text
-/import
-  csv_importer
-  excel_importer
-  column_mapper
-
-/normalization
-  appointment_normalizer
-  status_normalizer
-  customer_tokenizer
-
-/metrics
-  demand_metrics
-  cancellation_metrics
-  customer_metrics
-  revenue_metrics
-
-/detectors
-  low_demand_slot
-  revenue_gap
-  cancellation_hotspot
-  dormant_customer
-  service_demand_gap
-
-/scoring
-  opportunity_score
-  confidence_score
-
-/ai
-  opportunity_explanation
-  action_recommendation
+api/app/imports
+api/app/metrics
+api/app/analytics/detectors
+api/app/analytics/scoring
+api/app/opportunities
+api/app/recommendations
+api/app/actions
+api/app/results
 ```
+
+`/ai` Gateway와 provider adapter는 다음 단계에서 추가한다.
 
 ---
 
@@ -1067,7 +1070,7 @@ AI Recommendation
 
 # 35. 다음 개발 단계
 
-다음 단계에서는 실제 구현 가능한 수준으로 다음 항목을 정의한다.
+아래 초기 정의 항목은 현재 코드·migration·API contract·ADR로 구현되었다.
 
 1. PostgreSQL DB Schema
 2. CSV / Excel Import Schema
@@ -1080,4 +1083,4 @@ AI Recommendation
 9. 샘플 데이터셋
 10. PoC 테스트 시나리오
 
-이 단계가 완료되면 실제 백엔드 구현으로 넘어갈 수 있다.
+다음 구현은 structured AI Explanation/Recommendation contract, provider 중립 AI Gateway, 실패 격리와 감사 경계를 우선한다. AI는 저장된 Observation·Estimate·limitations만 입력받고 계산값을 변경할 수 없어야 한다.

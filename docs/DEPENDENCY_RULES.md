@@ -25,6 +25,21 @@ Infrastructure/Connectors
 
 **안쪽 계층은 바깥쪽 구현을 알면 안 된다.**
 
+## 2.1 현재 저장소 매핑
+
+| 논리 계층 | 현재 경로 |
+|---|---|
+| Apps/UI | `apps/web/app` |
+| API | `api/app/api/routes`, `api/app/schemas` |
+| Application/Domain workflow | `api/app/imports`, `opportunities`, `recommendations`, `actions`, `results` |
+| Metrics | `api/app/metrics` |
+| Detectors | `api/app/analytics/detectors` |
+| Scoring | `api/app/analytics/scoring` |
+| Infrastructure store | 각 application module의 `store.py` |
+| Database migration | `api/migrations` |
+
+현재 작은 MVP에서는 application contract와 PostgreSQL adapter가 같은 feature package에 있지만, Detector와 Scoring은 DB·HTTP·AI 없이 테스트 가능한 pure module로 유지한다.
+
 ---
 
 # 3. 허용 관계

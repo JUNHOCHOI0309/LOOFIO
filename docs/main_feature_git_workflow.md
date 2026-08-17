@@ -24,6 +24,15 @@ CI/CD / Production 배포
 
 Git 브랜치는 코드 이력을 관리하는 수단이고, Local 환경은 기능을 실행·검증하는 장소다. 환경 변수와 Secret은 브랜치가 아니라 환경별 설정으로 관리한다.
 
+현재 `.github/workflows/regression.yml`은 `feature/**`, `fix/**`, `test/**`, `ci/**`, `main` push마다 backend pytest와 web typecheck/build를 실행한다. 해당 branch CI 성공 후 병합하고, main CI 성공을 확인한 뒤 작업 브랜치를 삭제한다. `docs/**`, `chore/**`, `refactor/**` branch는 현재 branch push에서 자동 실행되지 않으므로 필요한 local 검증을 수행하고 main 병합 후 CI를 확인한다.
+
+DB migration이 포함된 기능은 다음을 추가로 확인한다.
+
+- migration은 번호순 append-only이며 application 배포보다 먼저 적용되는가
+- local에서는 transaction rollback 검증 후 개발 DB에 적용했는가
+- 기존 행을 재해석·삭제하지 않는가
+- rollback 또는 이전 application 호환 경로가 문서화됐는가
+
 ## 브랜치 역할
 
 | 브랜치 | 용도 |

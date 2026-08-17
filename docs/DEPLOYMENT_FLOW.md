@@ -37,40 +37,48 @@ Production과 Staging은 데이터/secret을 분리한다.
 
 # 3. Git Flow
 
-권장 기본 흐름:
+현재 1인 개발 기본 흐름:
 
 ```text
 feature/fix branch
-→ Pull Request
-→ CI
-→ Review
-→ main merge
-→ Staging deploy
-→ Smoke/Integration
-→ Production approval
-→ Production deploy
+→ local test
+→ commit / branch push
+→ GitHub Actions regression
+→ local --no-ff merge to main
+→ main push
+→ GitHub Actions regression
+→ branch delete
 ```
+
+Pull Request는 현재 기본 절차가 아니다. 상세 명령과 예외는 `main_feature_git_workflow.md`를 따른다. Production 배포가 연결되면 main CI 이후 staging·smoke·승인·production 단계를 추가해야 한다.
 
 장기 release branch 전략이 필요해지기 전에는 단순한 main 중심 흐름을 우선한다.
 
-실제 branch policy는 저장소 설정과 함께 확정한다.
-
 ---
 
-# 4. Pull Request Gate
+# 4. Merge Gate
 
-merge 전 최소 확인:
+현재 자동화된 확인:
 
 - unit test
-- lint/format
-- type/static check(사용 언어가 지원하는 경우)
-- dependency/security scan
-- API contract test
-- migration validation
-- tenant isolation 관련 테스트
-- Detector snapshot/regression test(관련 변경 시)
+- backend API·tenant·Detector·제품 루프 회귀 test
+- web TypeScript typecheck
+- web production build
 
-중요 파일 변경 시 CODEOWNERS review를 추가한다.
+변경 범위에 따라 사람이 추가 확인:
+
+- `git diff --check`, 의도한 파일만 stage, Secret 포함 여부
+- migration transaction 검증과 rollback/호환 경로
+- API contract·tenant isolation·Detector version·표본 시나리오
+
+아직 CI에 추가하지 않은 gate:
+
+- dependency/security scan
+- OpenAPI schema diff
+- 실제 PostgreSQL integration migration
+- Staging smoke test
+
+중요 파일 변경 시 logical owner 검토 또는 1인 개발 위험 자기검토 기록을 추가한다. 다인 협업으로 전환하면 CODEOWNERS와 PR review gate를 활성화한다.
 
 ---
 

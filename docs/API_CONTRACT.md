@@ -2,11 +2,9 @@
 
 ## 1. 상태
 
-이 문서는 **API 호환성과 리소스 경계 계약**을 정의한다.
+이 문서는 현재 FastAPI `/api/v1` 구현의 **API 호환성과 리소스 경계 계약**을 정의한다. 실제 request/response schema는 Pydantic model과 FastAPI OpenAPI로도 노출한다.
 
-아직 백엔드 프레임워크, 인증 공급자, 실제 endpoint 세부 구현은 확정되지 않았다.
-
-따라서 아래 리소스 경로는 v1 설계 기준이며 실제 구현 시 OpenAPI 문서로 고정한다.
+구현된 리소스는 auth, tenant, business, appointment import/mapping, metrics, detectors, opportunities, recommendations, actions, results, measurements다. 외부 AI·채널 connector·배포 API는 아직 없다. 전체 구현 상태는 `CURRENT_IMPLEMENTATION_STATUS.md`를 따른다.
 
 ---
 
@@ -463,15 +461,15 @@ OpenAPI가 추가되면 CI에서 schema diff를 검사하는 방향을 권장한
 
 ---
 
-# 17. 아직 미확정
+# 17. 아직 미확정·미구현
 
 다음은 구현 시 결정한다.
 
-- OAuth/JWT/session 방식
 - API Gateway
 - rate limit 수치
 - upload 방식(presigned URL 등)
 - async job polling/webhook
-- OpenAPI generation tool
+- OpenAPI schema diff gate
+- external connector API와 webhook contract
 
 이 항목을 임의로 본 계약의 확정 사실처럼 취급하지 않는다.

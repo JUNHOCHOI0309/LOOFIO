@@ -399,16 +399,23 @@ AI 설명이 deterministic 계산 결과와 불일치하면 계산 결과가 우
 
 ---
 
-# 12. 아직 결정되지 않은 기술
+# 12. 기술 결정 상태
+
+현재 구현으로 확정된 선택:
+
+- Backend: FastAPI / Pydantic / psycopg
+- Frontend: Next.js / React / TypeScript
+- Database: PostgreSQL
+- Authentication: Google·Naver direct OAuth와 서버 저장 세션
+- CI: GitHub Actions regression checks
 
 다음은 이 파일에서 임의 확정하지 않는다.
 
-- 백엔드 프레임워크
-- 프론트엔드 프레임워크
-- 클라우드 공급자
-- 인증 공급자
-- CI/CD 제품
+- 클라우드·Production hosting 공급자
 - 모니터링 공급자
 - Secret Manager 공급자
+- Queue·Cache 제품
+- AI provider/model
+- Production migration runner
 
-해당 선택은 별도 ADR로 기록한다.
+새 선택과 기존 선택의 변경은 별도 ADR로 기록한다. 실제 구현 범위는 `CURRENT_IMPLEMENTATION_STATUS.md`를 따른다.

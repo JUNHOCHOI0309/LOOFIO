@@ -3,6 +3,7 @@ title: "LOOFIO Hospital MVP 기술·제품 결정안"
 version: "1.0"
 date: "2026-08-13"
 status: "MVP 1차 결정 확정"
+implementation_reviewed_at: "2026-08-17"
 ---
 
 # LOOFIO Hospital MVP 기술·제품 결정안 v1.0
@@ -38,6 +39,26 @@ Next Analysis
 핵심 원칙은 다음과 같다.
 
 > 코드가 데이터에서 기회를 탐지하고, AI는 그 기회를 설명하고 실행 가능한 행동으로 변환한다.
+
+## 1.1 구현 반영 현황
+
+현재 확정안 중 다음 범위가 코드와 PostgreSQL migration으로 반영되었다.
+
+| 결정 영역 | 반영 상태 |
+|---|---|
+| Next.js web + FastAPI API + PostgreSQL | 완료 |
+| Google/Naver direct OAuth + server session | 완료 |
+| Tenant/Business/role boundary | 완료 |
+| Hospital Appointment CSV 계약·mapping·정규화 | 완료 |
+| Metric Engine·4개 Detector·RevenueGap | 완료 |
+| Opportunity persistence·evidence·version·score | 완료 |
+| Manual Recommendation·Decision·Action | 완료 |
+| Result와 관찰 기반 Measurement | MVP 완료 |
+| 실제 AI explanation/recommendation | 미구현 |
+| 외부 데이터·채널 자동 실행 | 미구현 |
+| Staging/Production 운영 | 미구현 |
+
+구체적인 endpoint, schema와 제한은 `API_CONTRACT.md`, `LOOFIO_DATA_SCHEMA_V1.md`, `CURRENT_IMPLEMENTATION_STATUS.md`를 따른다. 이 문서의 향후 제안은 구현 완료를 뜻하지 않는다.
 
 ---
 

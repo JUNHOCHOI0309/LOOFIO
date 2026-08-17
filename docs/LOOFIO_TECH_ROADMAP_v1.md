@@ -7,8 +7,27 @@
 
 - 문서 버전: v1.0
 - 기준일: 2026-08-13
+- 구현 상태 검토일: 2026-08-17
 - 대상: 초기 제품 기획 / MVP 개발 / 기술 검증
 - 핵심 방향: `Generate → Decide → Act → Measure → Learn`
+
+## 현재 구현 매핑
+
+이 문서는 장기 제품 방향을 정의한다. 2026-08-17 기준 Hospital Appointment MVP의 실제 상태는 다음과 같다.
+
+| Roadmap 영역 | 상태 | 구체적 범위 |
+|---|---|---|
+| Phase 0 데이터 기반 | 대부분 구현 | User/Tenant/Business, Appointment import, Offering/Customer 연결, Opportunity/Action/Result 저장 |
+| Phase 1 데이터 관찰 | 구현 | CSV 정규화, 예약·매출 Metric, 4개 Detector, RevenueGap |
+| Phase 1 기회 우선순위 | 구현 | versioned Opportunity와 `opportunity-score-v1` |
+| Phase 1 Recommendation | 부분 구현 | 유형별 deterministic manual template와 사용자 결정. LLM 설명은 미구현 |
+| 실행·성과 폐쇄 루프 | MVP 구현 | manual Action, Result, 직전 기간 baseline Measurement |
+| AI Gateway·콘텐츠 | 미구현 | provider/model, structured AI output, 콘텐츠 생성 없음 |
+| 외부 데이터·채널 | 미구현 | 날씨·상권·광고·메시지 connector 없음 |
+| Incrementality | 미구현 | 현재 변화량은 단순 비교이며 인과효과가 아님 |
+| Phase 2 이상 | 미구현 | 자동 실행, 세그먼트, A/B test, GEO, MMM 등 |
+
+세부 기능·검증 상태는 `CURRENT_IMPLEMENTATION_STATUS.md`를 기준으로 한다.
 
 ---
 
@@ -1355,7 +1374,7 @@ LOOFIO 개발 문서는 아래 순서로 확장한다.
 ```text
 01_PRODUCT_VISION.md
 02_TECH_ROADMAP.md
-03_DATA_SCHEMA.md
+LOOFIO_DATA_SCHEMA_V1.md
 04_OPPORTUNITY_ENGINE.md
 05_RECOMMENDATION_ENGINE.md
 06_AI_ARCHITECTURE.md
@@ -1364,7 +1383,6 @@ LOOFIO 개발 문서는 아래 순서로 확장한다.
 09_MEASUREMENT_FRAMEWORK.md
 ```
 
-**다음 작성 우선순위: `03_DATA_SCHEMA.md`**
+**데이터 스키마 현재 문서: `LOOFIO_DATA_SCHEMA_V1.md`**
 
-LOOFIO의 핵심은 데이터에서 시작하므로,
-로드맵 이후에는 실제로 어떤 데이터를 저장하고 어떤 형태로 입력받을지를 먼저 확정한다.
+현재 Hospital MVP의 저장 구조와 migration mapping은 데이터 스키마 문서에 반영됐다. 새 Domain Adapter와 External Context를 추가할 때 같은 문서를 확장한다.

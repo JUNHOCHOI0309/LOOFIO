@@ -8,6 +8,20 @@ LOOFIO 코드의 변경 책임과 필수 리뷰 영역을 논리적으로 정의
 
 실제 저장소에서는 `.github/CODEOWNERS.template`의 placeholder를 실제 GitHub handle/team으로 치환한다.
 
+## 1.1 현재 코드 경로 대응
+
+| Logical owner | 현재 경로 |
+|---|---|
+| Repository Maintainer | `/`, `docs`, `.github`, dependency manifest |
+| Core Platform | `api/app/auth`, `api/app/api/dependencies.py`, business store, `api/migrations` |
+| Data/Ingestion | `api/app/imports`, import routes/schemas, `sample-data` |
+| Opportunity Intelligence | `api/app/metrics`, `api/app/analytics`, `api/app/opportunities` |
+| Recommendation/Action | `api/app/recommendations`, `api/app/actions` |
+| Measurement | `api/app/results` |
+| Web Product | `apps/web/app` |
+
+1인 개발 단계의 실제 merge 방식은 `main_feature_git_workflow.md`를 따른다. 중요 계산·migration 변경은 ADR 또는 현재 상태 문서에 위험 관점 자기검토를 남긴다.
+
 ---
 
 # 2. Ownership 원칙

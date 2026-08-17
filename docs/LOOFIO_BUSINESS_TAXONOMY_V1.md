@@ -15,6 +15,12 @@ sources:
 
 본 문서는 LOOFIO가 특정 1개 업종에 고정되지 않고 가능한 한 다양한 소상공인·중소사업 유형을 지원하기 위한 **내부 사업 분류 계층**을 정의한다.
 
+## 1.1 현재 지원 범위
+
+2026-08-17 현재 실제 구현·검증 중인 Archetype은 `APPOINTMENT_SERVICE`의 Hospital Adapter 하나다. 정규화 Domain Object는 Appointment이며, Hospital sample pack을 기준으로 Metric·Detector·Opportunity·Action·Measurement 루프를 테스트한다. Production 배포가 완료됐다는 뜻은 아니다.
+
+다른 Archetype과 업종 매핑은 설계 후보이며 실제 import adapter, metric adapter, detector set이 구현됐다는 뜻이 아니다. 새 업종을 활성화하려면 raw taxonomy를 보존한 채 Domain Contract, data readiness, sample fixture와 회귀 테스트를 추가해야 한다. 현재 상세 범위는 `CURRENT_IMPLEMENTATION_STATUS.md`를 따른다.
+
 기준 원칙은 다음과 같다.
 
 > **직업명 자체를 업종으로 사용하는 것이 아니라, 해당 직업이 실제 사업으로 운영될 때의 수익 구조와 운영 데이터 형태를 LOOFIO Business Archetype으로 변환한다.**
@@ -605,7 +611,7 @@ Level C 업종에 대해 현재 MVP 기능이 완전히 지원되는 것처럼 �
 01_PRODUCT_VISION.md
 02_TECH_ROADMAP.md
 03_BUSINESS_TAXONOMY.md      ← 현재 문서
-04_DATA_SCHEMA.md
+LOOFIO_DATA_SCHEMA_V1.md
 05_OPPORTUNITY_ENGINE.md
 06_RECOMMENDATION_ENGINE.md
 07_AI_ARCHITECTURE.md
@@ -614,7 +620,7 @@ Level C 업종에 대해 현재 MVP 기능이 완전히 지원되는 것처럼 �
 10_MEASUREMENT_FRAMEWORK.md
 ```
 
-다음 우선순위는 `04_DATA_SCHEMA.md`다.
+현재 구현 스키마는 `LOOFIO_DATA_SCHEMA_V1.md`에 정리했다.
 
 다만 기존 `LOOFIO_OPPORTUNITY_ENGINE_V1.md`에 정의된 Minimum Data Contract를 폐기하지 않고, 이를 `APPOINTMENT_SERVICE`의 첫 번째 Domain Contract로 흡수한다.
 
@@ -631,7 +637,7 @@ Level C 업종에 대해 현재 MVP 기능이 완전히 지원되는 것처럼 �
 7. 공통 DB의 중심은 `Appointment`가 아니라 `Business + Revenue/Domain Event + Opportunity + Action + Measurement`다.
 8. 공식 분류 원본과 LOOFIO 해석값을 DB에서 분리한다.
 9. Level C는 지원 예정이지 현재 기능 지원 완료를 뜻하지 않는다.
-10. 다음 설계 문서는 다업종을 수용하는 `DATA_SCHEMA`다.
+10. 현재 `LOOFIO_DATA_SCHEMA_V1.md`는 Hospital MVP를 설명하며 다업종 확장 시 Domain Adapter schema를 추가해야 한다.
 
 ---
 
