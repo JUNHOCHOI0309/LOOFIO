@@ -42,6 +42,19 @@ class OpportunityDetector(BaseModel):
     version: str
 
 
+class OpportunityScoreBreakdown(BaseModel):
+    impact: float = Field(ge=0, le=35)
+    confidence: float = Field(ge=0, le=30)
+    persistence: float = Field(ge=0, le=20)
+    actionability: float = Field(ge=0, le=15)
+    total: float = Field(ge=0, le=100)
+
+
+class OpportunityScoring(BaseModel):
+    version: str
+    breakdown: OpportunityScoreBreakdown | None = None
+
+
 class Opportunity(BaseModel):
     id: str
     type: str
@@ -50,6 +63,7 @@ class Opportunity(BaseModel):
     observation: OpportunityObservation
     estimate: OpportunityEstimate | None = None
     score: float = Field(ge=0, le=100)
+    scoring: OpportunityScoring
     confidence: float = Field(ge=0, le=1)
     limitations: list[str]
     detector: OpportunityDetector

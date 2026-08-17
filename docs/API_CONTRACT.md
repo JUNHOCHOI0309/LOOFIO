@@ -118,6 +118,8 @@ GET    /api/v1/businesses/{businessId}/opportunities
 ```
 
 `refresh`는 tenant/business 범위의 Detector 후보를 Opportunity로 생성하거나 갱신한다. 현재 `low-demand-revenue-gap-v2`는 예약 수요 Observation과 같은 요일 비교 시간대의 RevenueGap Estimate를 결합한다. `cancellation-hotspot-v1`과 `service-demand-gap-v1`은 Observation 전용 Opportunity로 함께 갱신된다. `as_of_date`를 명시하면 `dormant-customer-v1`도 갱신된다. CSV import 완료와 Dashboard의 명시적 갱신은 현재 날짜를 `as_of_date`로 전달해 모든 현재 Detector를 갱신한다. 과거 `low-demand-slot-v1` Opportunity는 재해석하지 않고 보존한다. 응답은 Observation, 가정 기반 Estimate, limitations, detector version, score, confidence를 분리한다.
+
+신규·갱신 Opportunity는 `opportunity-score-v1`을 사용한다. 총점은 `Impact 35 + Confidence 30 + Persistence 20 + Actionability 15`로 구성하고, 각 구성요소와 합계를 `scoring.breakdown`에 노출한다. Detector는 비교 가능한 0~1 factor만 제공하며 공통 scoring 모듈이 가중치·상한·합계를 결정한다. 기존 행은 재계산하지 않고 `legacy-unversioned-v0`로 보존하며 breakdown은 `null`일 수 있다. 이 점수는 검토 우선순위이며 성공 확률, 예상 매출 또는 Action 효과가 아니다.
 Estimate는 실제 매출이나 보장값이 아니며, `Recommendation`이나 외부 실행을 포함하지 않는다.
 
 ## Recommendations
@@ -229,6 +231,16 @@ Opportunity 응답은 최소 다음 의미 계층을 유지한다.
   "type": "LOW_DEMAND_SLOT",
   "status": "open",
   "score": 82.0,
+  "scoring": {
+    "version": "opportunity-score-v1",
+    "breakdown": {
+      "impact": 30.0,
+      "confidence": 22.0,
+      "persistence": 18.0,
+      "actionability": 12.0,
+      "total": 82.0
+    }
+  },
   "confidence": 0.74,
   "observation": [],
   "estimate": {
