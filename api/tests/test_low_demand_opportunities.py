@@ -28,6 +28,16 @@ def test_low_demand_opportunity_separates_observation_from_estimate() -> None:
     assert monday_morning.estimate.value_high.amount == "325875.00"
     assert "50~100%" in monday_morning.estimate.assumptions[1]
     assert monday_morning.score <= 100
+    assert monday_morning.scoring.version == "opportunity-score-v1"
+    assert monday_morning.score == monday_morning.scoring.total
+    assert monday_morning.scoring.total == sum(
+        (
+            monday_morning.scoring.impact,
+            monday_morning.scoring.confidence,
+            monday_morning.scoring.persistence,
+            monday_morning.scoring.actionability,
+        )
+    )
     assert monday_morning.confidence < 1
     assert monday_morning.detector_version == "low-demand-revenue-gap-v2"
     assert "비교 시간대의 완료 결제금액 표본" in monday_morning.estimate.assumptions[2]
@@ -67,6 +77,8 @@ def test_refresh_persists_opportunities_idempotently_within_tenant(monkeypatch) 
     assert first.status_code == 200
     assert first.json()["refreshed_count"] == 1
     assert first.json()["opportunities"][0]["estimate"]["value_high"]["amount"] == "325875.00"
+    assert first.json()["opportunities"][0]["scoring"]["version"] == "opportunity-score-v1"
+    assert first.json()["opportunities"][0]["scoring"]["breakdown"]["total"] == first.json()["opportunities"][0]["score"]
     assert second.status_code == 200
     assert second.json()["opportunities"][0]["id"] == first.json()["opportunities"][0]["id"]
     assert listed.status_code == 200

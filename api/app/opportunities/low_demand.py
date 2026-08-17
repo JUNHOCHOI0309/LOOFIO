@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from app.analytics.detectors.low_demand_slots import DETECTOR_VERSION as LOW_DEMAND_DETECTOR_VERSION, detect_low_demand_slots
 from app.analytics.detectors.revenue_gap import detect_revenue_gaps
+from app.analytics.scoring.opportunity_score import OpportunityScore, score_opportunity
 from app.metrics.appointments import AppointmentMetricRow
 from app.schemas.detectors import RevenueGapCandidate
 from app.schemas.opportunities import OpportunityEstimate, OpportunityObservation
@@ -21,10 +22,14 @@ class OpportunityDraft:
     segment: dict[str, str | int]
     observation: OpportunityObservation
     estimate: OpportunityEstimate | None
-    score: float
+    scoring: OpportunityScore
     confidence: float
     limitations: list[str]
     evidence: list[tuple[str, dict[str, object]]]
+
+    @property
+    def score(self) -> float:
+        return self.scoring.total
 
 
 def build_low_demand_opportunity_drafts(rows: list[AppointmentMetricRow]) -> list[OpportunityDraft]:
@@ -44,7 +49,12 @@ def build_low_demand_opportunity_drafts(rows: list[AppointmentMetricRow]) -> lis
         revenue_gap = revenue_gaps.get((candidate.weekday, candidate.slot_start_hour))
         estimate = _estimate(revenue_gap)
         confidence = _confidence(candidate.observed_weeks, revenue_gap is not None)
-        score = _score(estimate, candidate.observed_weeks, confidence)
+        scoring = _score(
+            estimate=estimate,
+            demand_index=candidate.demand_index,
+            observed_weeks=candidate.observed_weeks,
+            confidence=confidence,
+        )
         segment = {"weekday": candidate.weekday, "start_hour": candidate.slot_start_hour, "end_hour": candidate.slot_start_hour + 2}
         limitations = [*detection.limitations]
         if not estimate:
@@ -66,7 +76,7 @@ def build_low_demand_opportunity_drafts(rows: list[AppointmentMetricRow]) -> lis
                 segment=segment,
                 observation=observation,
                 estimate=estimate,
-                score=score,
+                scoring=scoring,
                 confidence=confidence,
                 limitations=limitations,
                 evidence=evidence,
@@ -95,8 +105,16 @@ def _confidence(observed_weeks: int, has_payment_data: bool) -> float:
     return round(min(0.85, 0.45 + weeks_component + payment_component), 3)
 
 
-def _score(estimate: OpportunityEstimate | None, observed_weeks: int, confidence: float) -> float:
-    impact = min(35.0, float(Decimal(estimate.value_high.amount) / Decimal("1000000") * Decimal("35"))) if estimate else 0.0
-    confidence_points = confidence * 30
-    persistence = min(20.0, observed_weeks / 12 * 20)
-    return round(impact + confidence_points + persistence + 15, 2)
+def _score(
+    *, estimate: OpportunityEstimate | None, demand_index: float, observed_weeks: int, confidence: float
+) -> OpportunityScore:
+    if estimate:
+        impact_ratio = float(Decimal(estimate.value_high.amount) / Decimal("1000000"))
+    else:
+        impact_ratio = 1 - min(1.0, demand_index)
+    return score_opportunity(
+        impact_ratio=impact_ratio,
+        confidence_ratio=confidence,
+        persistence_ratio=observed_weeks / 12,
+        actionability_ratio=1.0,
+    )

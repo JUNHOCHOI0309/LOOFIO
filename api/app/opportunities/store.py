@@ -10,7 +10,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Json
 
 from app.opportunities.low_demand import OpportunityDraft
-from app.schemas.opportunities import Opportunity, OpportunityDetector
+from app.schemas.opportunities import Opportunity, OpportunityDetector, OpportunityScoring
 
 
 class OpportunityStoreUnavailable(RuntimeError):
@@ -38,15 +38,16 @@ class PostgresOpportunityStore:
             refreshed: list[Opportunity] = []
             for draft in drafts:
                 cursor.execute(
-                    "INSERT INTO opportunities (tenant_id, business_id, opportunity_type, detector_code, detector_version, natural_key, segment, observation, estimate, score, confidence, limitations) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                    "INSERT INTO opportunities (tenant_id, business_id, opportunity_type, detector_code, detector_version, natural_key, segment, observation, estimate, score, score_version, score_breakdown, confidence, limitations) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                     "ON CONFLICT (tenant_id, business_id, detector_code, detector_version, natural_key) DO UPDATE SET "
-                    "segment = EXCLUDED.segment, observation = EXCLUDED.observation, estimate = EXCLUDED.estimate, score = EXCLUDED.score, confidence = EXCLUDED.confidence, limitations = EXCLUDED.limitations, "
+                    "segment = EXCLUDED.segment, observation = EXCLUDED.observation, estimate = EXCLUDED.estimate, score = EXCLUDED.score, score_version = EXCLUDED.score_version, score_breakdown = EXCLUDED.score_breakdown, confidence = EXCLUDED.confidence, limitations = EXCLUDED.limitations, "
                     "last_detected_at = now(), updated_at = now() WHERE opportunities.status = 'open' "
                     "RETURNING *",
                     (
                         tenant_id, business_id, draft.opportunity_type, draft.detector_code, draft.detector_version, draft.natural_key, Json(draft.segment), Json(draft.observation.model_dump()),
-                        Json(draft.estimate.model_dump()) if draft.estimate else None, draft.score, draft.confidence, Json(draft.limitations),
+                        Json(draft.estimate.model_dump()) if draft.estimate else None, draft.score, draft.scoring.version,
+                        Json(draft.scoring.breakdown()), draft.confidence, Json(draft.limitations),
                     ),
                 )
                 row = cursor.fetchone()
@@ -123,6 +124,7 @@ class InMemoryOpportunityStore:
             opportunity = Opportunity(
                 id=existing.id if existing else str(uuid4()), type=draft.opportunity_type, status=existing.status if existing else "open",
                 segment=draft.segment, observation=draft.observation, estimate=draft.estimate, score=draft.score, confidence=draft.confidence,
+                scoring=OpportunityScoring(version=draft.scoring.version, breakdown=draft.scoring.breakdown()),
                 limitations=draft.limitations, detector=OpportunityDetector(code=draft.detector_code, version=draft.detector_version),
                 first_detected_at=existing.first_detected_at if existing else now, last_detected_at=now,
             )
@@ -150,7 +152,9 @@ class InMemoryOpportunityStore:
 def _opportunity_from_row(row: dict) -> Opportunity:
     return Opportunity(
         id=str(row["id"]), type=row["opportunity_type"], status=row["status"], segment=row["segment"], observation=row["observation"],
-        estimate=row["estimate"], score=float(row["score"]), confidence=float(row["confidence"]), limitations=row["limitations"],
+        estimate=row["estimate"], score=float(row["score"]),
+        scoring=OpportunityScoring(version=row.get("score_version", "legacy-unversioned-v0"), breakdown=row.get("score_breakdown")),
+        confidence=float(row["confidence"]), limitations=row["limitations"],
         detector=OpportunityDetector(code=row["detector_code"], version=row["detector_version"]),
         first_detected_at=row["first_detected_at"], last_detected_at=row["last_detected_at"],
     )
