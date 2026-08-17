@@ -43,6 +43,18 @@ AI가 원인과 실행안 제안
 
 제품의 장기 비전은 여전히 AI 마케팅 매니저이지만, 첫 제품은 **경제적 문제 하나를 명확하게 해결하는 것**에서 시작한다.
 
+## 1.1 Hospital MVP 구현 검증 현황
+
+2026-08-17 현재 전략의 첫 검증 범위는 Hospital Appointment CSV로 좁혀 구현했다.
+
+- 사업 내부 데이터: 예약 상태·Offering·가명 고객·실제 결제금액
+- 관찰: 예약량, 완료, 취소, 노쇼, 실제 완료 매출, 시간대 패턴
+- 기회 탐지: LowDemandSlot, RevenueGap, CancellationHotspot, DormantCustomer, ServiceDemandGap
+- 우선순위: versioned Opportunity Score
+- 실행 루프: manual Recommendation → 사용자 결정 → manual Action → Result → baseline Measurement
+
+현재 시스템에는 실제 AI 호출, 콘텐츠 생성, 외부 채널 실행, 날씨·상권·생활인구 결합이 없다. 따라서 이 문서의 AI·외부 데이터·자동화 항목은 로드맵이며 제공 기능으로 해석하지 않는다. 실제 범위는 `CURRENT_IMPLEMENTATION_STATUS.md`를 따른다.
+
 ## 2. 핵심 결론
 
 ### 2.1 고객은 AI가 아니라 결과를 구매한다

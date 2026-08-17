@@ -2,6 +2,8 @@
 
 LOOFIO Hospital MVP의 초기 모노레포입니다. 사업 데이터를 기반으로 기회를 탐지하고, 승인된 행동과 결과 측정까지 연결하는 B2B SaaS를 만듭니다.
 
+현재 구현 범위와 아직 구현하지 않은 기능은 [`docs/CURRENT_IMPLEMENTATION_STATUS.md`](docs/CURRENT_IMPLEMENTATION_STATUS.md), 데이터 모델은 [`docs/LOOFIO_DATA_SCHEMA_V1.md`](docs/LOOFIO_DATA_SCHEMA_V1.md)를 기준으로 확인합니다.
+
 ## 구성
 
 - `apps/web`: Next.js 기반 운영 UI

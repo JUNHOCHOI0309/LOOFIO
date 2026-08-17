@@ -32,6 +32,25 @@ Next Analysis
 
 > AI가 원본 데이터에서 기회를 임의 생성하지 않는다. 데이터 계층과 deterministic engine이 먼저 구조화된 사실과 후보 기회를 만든다.
 
+## 1.1 현재 구현 snapshot
+
+2026-08-17 현재 Hospital Appointment MVP는 다음 경로를 실제로 구현한다.
+
+```text
+Next.js Dashboard/Data UI
+→ FastAPI /api/v1
+→ PostgreSQL tenant-scoped store
+→ CSV normalization
+→ Appointment Metrics
+→ 4 Detectors
+→ versioned Opportunity Score
+→ deterministic manual Recommendation
+→ Manual Action
+→ Result + baseline Measurement
+```
+
+`AI Explanation / Recommendation` 중 실제 LLM Gateway와 provider adapter는 아직 구현하지 않았다. 현재 Recommendation은 계산 결과를 바꾸지 않는 버전 고정 수동 검토 template이다. 실제 경로와 미구현 경계는 `CURRENT_IMPLEMENTATION_STATUS.md`를 따른다.
+
 ---
 
 # 2. Logical Architecture
@@ -443,13 +462,12 @@ CSV/Excel
 
 이 문서는 다음을 특정 제품으로 확정하지 않는다.
 
-- 웹 프레임워크
-- API 프레임워크
 - Queue
 - Cache
 - Cloud
-- Auth
-- CI/CD
 - Monitoring vendor
+- AI provider/model routing
+- Secret Manager
+- Production migration runner
 
 해당 결정은 ADR로 추가한다.

@@ -1,5 +1,7 @@
 # LOOFIO Prohibited Changes v1
 
+현재 구현 범위와 미구현 안전 경계는 `CURRENT_IMPLEMENTATION_STATUS.md`를 함께 참조한다. 특히 실제 AI provider와 외부 채널은 아직 연결되지 않았으며, 이 문서의 승인·PII·자동화 금지 규칙을 충족하는 별도 설계 없이는 추가하지 않는다.
+
 이 문서는 LOOFIO에서 **코드가 동작하더라도 허용하지 않는 변경**을 명시한다.
 
 ---
