@@ -55,8 +55,8 @@ Repository
 Branch
 → main
 
-Latest document-aligned main
-→ 0c75e524af5e9baa896e5685103ce8afe858b5a0
+Document alignment content commit
+→ 0adeaae5866f37afb679336d20c28c3cfb2e5e17
 
 Current implemented code baseline recorded by status document
 → b7cc45d58b1fe1faa592888fd63f652ce0174f4a
@@ -653,7 +653,7 @@ Active 운영
 ```text
 code_baseline_commit: b7cc45d...
 source_document_alignment_commit: 0c75e524...
-document_alignment_commit: GitHub 반영 후 실제 commit SHA
+document_alignment_commit: 0adeaae5866f37afb679336d20c28c3cfb2e5e17
 ```
 
 ## 15.2 다음 구현 우선순위 — 본 묶음에서 정렬
@@ -815,8 +815,8 @@ Persistence는 M1~M7 Gate 이후 M8에서 시작한다.
 신규 기획 문서 작성은 현재 범위에서 종료한다.
 
 ```text
-1. 본 문서 묶음을 GitHub docs에 반영
-2. 실제 반영 commit SHA를 CURRENT_IMPLEMENTATION_STATUS에 기록
+1. 본 문서 묶음을 GitHub docs에 반영 — 완료
+2. 실제 반영 commit SHA를 CURRENT_IMPLEMENTATION_STATUS에 기록 — 완료
 3. 로컬에서 B01 — Decision Contract 구현
 ```
 

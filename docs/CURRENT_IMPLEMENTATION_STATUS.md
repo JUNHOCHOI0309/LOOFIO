@@ -4,7 +4,7 @@
 - 기준 브랜치: `main`
 - `code_baseline_commit`: `b7cc45d58b1fe1faa592888fd63f652ce0174f4a`
 - `source_document_alignment_commit`: `0c75e524af5e9baa896e5685103ce8afe858b5a0`
-- `document_alignment_commit`: GitHub 반영 후 실제 commit SHA로 갱신
+- `document_alignment_commit`: `0adeaae5866f37afb679336d20c28c3cfb2e5e17`
 - 문서 패키지: `decision-intelligence-docs-v1`
 - 제품 범위: Hospital Appointment MVP
 
@@ -236,10 +236,10 @@ AI는 deterministic Package와 Quality Preview가 안정된 뒤 별도 Epic으�
 
 ## 10. 문서 반영 후 확인
 
-이 문서 묶음을 GitHub에 반영한 뒤 다음 값을 실제 commit SHA로 갱신한다.
+Decision Intelligence 문서 본문을 반영한 commit은 다음과 같다.
 
 ```text
-document_alignment_commit
+document_alignment_commit: 0adeaae5866f37afb679336d20c28c3cfb2e5e17
 ```
 
 문서 반영만으로 기능 상태 표의 `미구현`을 `구현`으로 바꾸지 않는다.
