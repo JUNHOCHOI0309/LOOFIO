@@ -1110,6 +1110,7 @@ Measurement Evidence Grade / Precision
 0024-measurement-meaning-separation.md
 0025-channel-execution-levels.md
 0026-cause-analysis-preview-api.md
+0027-strategy-preview-api.md
 ```
 
 ## 12. 구현 연결

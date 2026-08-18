@@ -2,7 +2,7 @@
 
 - 기준일: 2026-08-18
 - 기준 브랜치: `main`
-- `code_baseline_commit`: `defc01f2e0cf25effd7fe79538f98eed888f1f3f`
+- `code_baseline_commit`: `162d6d4ae03ba3be3477d040d337217a7cd18088`
 - `source_document_alignment_commit`: `0c75e524af5e9baa896e5685103ce8afe858b5a0`
 - `document_alignment_commit`: `0adeaae5866f37afb679336d20c28c3cfb2e5e17`
 - 문서 패키지: `decision-intelligence-docs-v1`
@@ -85,8 +85,8 @@ ROI
 | Dashboard | 구현 | Metric·Detector·Opportunity·Score·Recommendation·Action·Result·Measurement 표시 |
 | Decision Input Contract | B01 구현 | immutable `DecisionField`, provenance·freshness, Decimal Money, LOW_DEMAND_SLOT `DecisionContextSnapshot`, D0~D4 Readiness, Missing Requirement, Hospital PII·tenant scope 검증 |
 | Cause Analysis | B03 Preview API 구현 | B02 순수 Domain + server-scoped LOW_DEMAND_SLOT preview, deterministic input hash/preview ID, editor role·tenant/business scope, PII reject, no persistence |
-| Strategy | B04 순수 Domain 구현 | LOW_DEMAND_SLOT 10개 Strategy taxonomy, Cause→Strategy relation, Hard Gate, Economics adapter, deterministic Priority Score, alternatives, DATA_COLLECTION/NO_ACTION fallback, Playbook handoff |
-| 회귀 검증 | 구현 | backend 103 tests, sample-pack 제품 루프, Cause/Strategy 회귀, web typecheck/build |
+| Strategy | B05 Preview API 구현 | LOW_DEMAND_SLOT 10개 Strategy taxonomy, Cause→Strategy relation, Hard Gate, Economics adapter, deterministic Priority Score, alternatives, DATA_COLLECTION/NO_ACTION fallback, server-scoped Cause→Strategy 무저장 Preview |
+| 회귀 검증 | 구현 | backend 108 tests, sample-pack 제품 루프, Cause/Strategy HTTP 회귀, web typecheck/build |
 | CI | 구현 | GitHub Actions `Regression checks`, `feature/fix/test/ci`와 `main` push 검사 |
 
 ---
@@ -146,6 +146,7 @@ Action 효과
 | Decision Input Domain | `api/app/decisioning` |
 | Cause Analysis Domain | `api/app/decisioning/causes` |
 | Strategy Domain | `api/app/decisioning/strategies` |
+| Strategy Preview Application | `api/app/decisioning/strategy_preview.py` |
 | PostgreSQL migration | `api/migrations` |
 | 회귀 테스트 | `api/tests` |
 
@@ -160,7 +161,7 @@ Decision Intelligence 설계 문서는 완료됐다. 아래 구현 상태는 실
 | Planning / Decision | Planning Index, Decision Register, Roadmap, Backlog 완료 | 미구현 |
 | Decision Input | D0~D4, 상태·출처·신선도 계약 완료 | B01 순수 Domain 구현·21개 전용 테스트, API/persistence 미구현 |
 | Cause Analysis | Cause taxonomy·Evidence·Diagnostic·Score 설계 완료 | B03 Preview API·무저장 HTTP 회귀 구현·12개 전용/HTTP 테스트, persistence·Diagnostic Answer 저장 미구현 |
-| Strategy | Hard Gate·대안 비교·DATA_COLLECTION·NO_ACTION 설계 완료 | B04 순수 Domain 구현·4개 전용 테스트, Preview API/persistence 미구현 |
+| Strategy | Hard Gate·대안 비교·DATA_COLLECTION·NO_ACTION 설계 완료 | B05 server-scoped 무저장 Preview API·9개 전용/HTTP 테스트, persistence·사용자 입력 UI 미구현 |
 | Playbook | Definition·Applicability·Instance, Hospital Core 12개 설계 완료 | 미구현 |
 | Experiment | Method·Grade·Precision·Success·Stop 계약 완료 | 미구현 |
 | Recommendation Package | Package Type·Revision·Legacy Adapter 설계 완료 | 미구현 |
@@ -168,15 +169,15 @@ Decision Intelligence 설계 문서는 완료됐다. 아래 구현 상태는 실
 | Measurement Framework | Actual·Estimate·Delta·Incremental·Economics 의미 분리 설계 완료 | 미구현 |
 | Channel Execution | Manual·Copy·Staff·Connector 수준과 Event 계약 완료 | 미구현 |
 | DI Data Schema | `0012~0020` additive proposal 완료 | migration 미작성 |
-| DI API Contract | Preview-first·Persistence·Execution API proposal 완료 | Cause Preview endpoint 1개 구현, 나머지 미구현 |
-| ADR | `0020~0025` Decision Intelligence 목표 결정 기록 완료 | Cause Preview 구현 경계는 ADR 0026으로 기록 |
+| DI API Contract | Preview-first·Persistence·Execution API proposal 완료 | Cause / Strategy Preview endpoint 2개 구현, persistence·execution 미구현 |
+| ADR | `0020~0025` Decision Intelligence 목표 결정 기록 완료 | Cause / Strategy Preview 구현 경계는 ADR 0026·0027로 기록 |
 
 ---
 
 ## 7. 아직 구현하지 않은 범위
 
 - Decision Context Preview API·Cause Diagnostic Answer 저장·사용자 입력 UI·persistence
-- Strategy Preview API·HTTP 회귀·사용자 입력 UI·persistence
+- Strategy Preview 사용자 입력 UI·persistence·selection override
 - Versioned Playbook Registry Runtime과 Instance
 - Experiment Definition·Assignment·Evaluation
 - Recommendation Package v2와 Quality Validator
@@ -214,10 +215,13 @@ B03 Cause Preview / Regression 완료
 B04 Strategy Pure Domain 완료
 → ST-001~ST-009
 
-B05 Strategy Preview / Regression
+B05 Strategy Preview / Regression 완료
 → ST-010~ST-012
 
-B06~B10 Playbook / Experiment / Package / Quality Preview
+B06 Playbook Framework & Catalog
+→ PB-001~PB-007 / PBC-001~PBC-005 / PBC-007~PBC-008
+
+B07~B10 Experiment / Package / Quality Preview
 
 B11 UI / 기존 Manual Action Handoff
 
@@ -334,6 +338,30 @@ Playbook resolution·Experiment·Recommendation Package
 
 B04 코드 기준 커밋은 `defc01f2e0cf25effd7fe79538f98eed888f1f3f`다.
 
+### B05 구현 경계
+
+구현:
+
+```text
+POST /api/v1/opportunities/{opportunityId}/strategy-runs/preview
+server-side Opportunity / tenant / business scope binding
+server-bound Decision Context → Cause Analysis → Strategy Run 순차 재계산
+deterministic as_of-aware Strategy Preview ID, input hash, engine version
+owner/admin/marketer authorization, cross-tenant 404, Hospital PII 422
+client Cause 결과 주입 거부, no persistence / no external execution HTTP regression
+```
+
+의도적으로 제외:
+
+```text
+Decision Context 사용자 입력 UI
+Strategy Run persistence/migration·selection override
+Playbook resolution·Experiment·Recommendation Package
+사용자 승인·외부 채널 실행
+```
+
+B05 코드 기준 커밋은 `162d6d4ae03ba3be3477d040d337217a7cd18088`다.
+
 ---
 
 ## 9. 문서 해석 규칙
@@ -341,7 +369,7 @@ B04 코드 기준 커밋은 `defc01f2e0cf25effd7fe79538f98eed888f1f3f`다.
 - `00_PLANNING_INDEX.md`는 문서 상태와 읽기 순서의 단일 진입점이다.
 - `DECISION_REGISTER_V2.md`는 확정·임시·미결정·폐기 결정을 관리한다.
 - 기존 `ADR 0001~0019`는 과거 시점의 기록이므로 수정하지 않는다.
-- `ADR 0020~0025`는 목표 Decision Intelligence 구조를 결정하지만 구현 완료를 뜻하지 않는다. `ADR 0026`은 B03의 실제 Preview 경계를 기록한다.
+- `ADR 0020~0025`는 목표 Decision Intelligence 구조를 결정하지만 구현 완료를 뜻하지 않는다. `ADR 0026·0027`은 B03·B05의 실제 Preview 경계를 기록한다.
 - 현재 구현 여부는 migration·code·test와 본 문서를 함께 확인한다.
 - 현재 API 필드와 의미는 `API_CONTRACT.md`가 우선한다.
 - 신규 목표 API는 `LOOFIO_API_CONTRACT_DECISION_INTELLIGENCE_V1.md`를 따른다.

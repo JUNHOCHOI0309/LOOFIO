@@ -475,7 +475,33 @@ OpenAPI가 추가되면 CI에서 schema diff를 검사하는 방향을 권장한
 
 ---
 
-# 17. 아직 미확정·미구현
+# 17. Strategy Preview
+
+```text
+POST /api/v1/opportunities/{opportunity_id}/strategy-runs/preview
+```
+
+`owner`, `admin`, `marketer`가 active tenant 안의 `LOW_DEMAND_SLOT` Opportunity에 대해 실행할 수 있다.
+서버는 Opportunity와 tenant/business scope를 다시 결합하고, request의 `decision_context`를 검증한 뒤 Cause Analysis와 Strategy Run을 순서대로 재계산한다.
+
+```json
+{
+  "contract_version": "strategy-preview-v1",
+  "as_of": "2026-08-18T12:00:00+09:00",
+  "decision_context": {}
+}
+```
+
+응답은 `preview`, server-bound `decision_context`, `cause_analysis`, `strategy_run`을 포함한다. 동일한 Context, `as_of`, 엔진 버전은 동일한 `preview_id`와 결과를 반환한다.
+
+- client는 tenant, business, Opportunity, Observation, detector, snapshot ID 또는 Cause/Strategy 결과를 제출하거나 변경할 수 없다.
+- Hospital PII·임상 정보는 `422 PII_FIELD_REJECTED`, 다른 tenant Opportunity는 `404 NOT_FOUND`로 처리한다.
+- Preview는 Cause/Strategy Run을 저장하지 않고 Playbook·Action·외부 채널 실행을 만들지 않는다.
+- `selection_overrides`와 Strategy persistence는 아직 구현하지 않았다. 현재 endpoint는 계산된 후보와 선택 결과를 read-only로 반환한다.
+
+---
+
+# 18. 아직 미확정·미구현
 
 다음은 구현 시 결정한다.
 
