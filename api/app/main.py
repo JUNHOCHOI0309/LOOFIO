@@ -16,6 +16,7 @@ from app.api.routes.imports import router as imports_router
 from app.api.routes.metrics import router as metrics_router
 from app.api.routes.opportunities import router as opportunities_router
 from app.api.routes.results import router as results_router
+from app.api.routes.strategy_runs import router as strategy_runs_router
 from app.auth.store import PostgresAuthStore
 from app.actions.store import PostgresActionStore
 from app.imports.store import PostgresAppointmentImportStore
@@ -63,6 +64,7 @@ app.include_router(imports_router, prefix="/api/v1")
 app.include_router(metrics_router, prefix="/api/v1")
 app.include_router(opportunities_router, prefix="/api/v1")
 app.include_router(results_router, prefix="/api/v1")
+app.include_router(strategy_runs_router, prefix="/api/v1")
 
 
 @app.get("/api/v1/health", tags=["system"])
