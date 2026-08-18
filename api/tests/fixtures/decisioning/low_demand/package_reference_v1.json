@@ -1,0 +1,11 @@
+{
+  "fixture_version": "low-demand-package-reference-v1",
+  "implementation_status": "future_contract_fixture",
+  "tenant_id": "TENANT_FIXTURE_01",
+  "business_id": "BUSINESS_FIXTURE_01",
+  "opportunity_id": "OPPORTUNITY_LOW_DEMAND_01",
+  "source_snapshot_id": "SNAPSHOT_LOW_DEMAND_D4_01",
+  "source_evidence_refs": ["EVIDENCE_LOW_DEMAND_TUE_14_01"],
+  "package_schema_version": "recommendation-package-v2",
+  "expected_handoff": "legacy_manual_action"
+}
