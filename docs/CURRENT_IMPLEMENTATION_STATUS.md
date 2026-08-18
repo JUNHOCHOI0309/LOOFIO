@@ -2,7 +2,7 @@
 
 - 기준일: 2026-08-18
 - 기준 브랜치: `main`
-- `code_baseline_commit`: `92b55f6bbdd88b0662f2c4a97a2ff324fbc6e9aa`
+- `code_baseline_commit`: `defc01f2e0cf25effd7fe79538f98eed888f1f3f`
 - `source_document_alignment_commit`: `0c75e524af5e9baa896e5685103ce8afe858b5a0`
 - `document_alignment_commit`: `0adeaae5866f37afb679336d20c28c3cfb2e5e17`
 - 문서 패키지: `decision-intelligence-docs-v1`
@@ -332,7 +332,7 @@ Playbook resolution·Experiment·Recommendation Package
 사용자 승인·외부 채널 실행
 ```
 
-B04 코드 기준 커밋은 `92b55f6bbdd88b0662f2c4a97a2ff324fbc6e9aa`다.
+B04 코드 기준 커밋은 `defc01f2e0cf25effd7fe79538f98eed888f1f3f`다.
 
 ---
 
