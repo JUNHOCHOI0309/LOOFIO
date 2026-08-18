@@ -83,7 +83,15 @@ def _evaluate(family: StrategyFamily, snapshot, cause_analysis: CauseAnalysisRes
     elif definition.strategy_class is StrategyClass.HOLD:
         status = StrategyCandidateStatus.ELIGIBLE
     elif blockers:
-        status = StrategyCandidateStatus.NEEDS_POLICY_REVIEW if any(blocker.code == "POLICY_REVIEW_REQUIRED" for blocker in blockers) else StrategyCandidateStatus.INFEASIBLE if any(blocker.code.endswith("UNAVAILABLE") or blocker.code == "ECONOMICS_INFEASIBLE" for blocker in blockers) else StrategyCandidateStatus.NEEDS_DATA
+        status = (
+            StrategyCandidateStatus.NEEDS_POLICY_REVIEW
+            if any(blocker.code == "POLICY_REVIEW_REQUIRED" for blocker in blockers)
+            else StrategyCandidateStatus.INFEASIBLE
+            if any(blocker.code.endswith("UNAVAILABLE") or blocker.code == "ECONOMICS_INFEASIBLE" for blocker in blockers)
+            else StrategyCandidateStatus.DEPRIORITIZED
+            if all(blocker.code == "INHIBITORY_CAUSE" for blocker in blockers)
+            else StrategyCandidateStatus.NEEDS_DATA
+        )
     elif missing:
         status = StrategyCandidateStatus.NEEDS_DATA
     elif not support:
@@ -148,7 +156,7 @@ def _requirements(family):
         StrategyFamily.DISCOVERABILITY: common + ("offering.target_slot_visible", "policy.policy_review_status"),
         StrategyFamily.CONVERSION: common + ("cause_signals.booking_funnel_available",),
         StrategyFamily.OFFER_PACKAGING: common + ("offering.eligibility", "policy.policy_review_status"),
-        StrategyFamily.PARTNERSHIP_REFERRAL: common + ("policy.policy_review_status", "economics.budget_cap"),
+        StrategyFamily.PARTNERSHIP_REFERRAL: common + ("cause_signals.channel_attribution_available", "policy.policy_review_status", "economics.budget_cap"),
         StrategyFamily.ACQUISITION: common + ("cause_signals.broader_demand_proxy_available", "policy.policy_review_status", "economics.budget_cap"),
         StrategyFamily.CANCELLATION_RECOVERY: common + ("cause_signals.cancellation_evidence_available", "customer_activation.marketing_consent_capability"),
     }.get(family, ())
@@ -169,6 +177,10 @@ def _economic_factor(snapshot, family):
     economics = snapshot.economics
     if economics is None or economics.economics_status is EconomicsStatus.UNKNOWN:
         return None if family in {StrategyFamily.PARTNERSHIP_REFERRAL, StrategyFamily.ACQUISITION} else 0.5
+    if family in {StrategyFamily.PARTNERSHIP_REFERRAL, StrategyFamily.ACQUISITION} and (
+        not economics.budget_cap.value or economics.budget_cap.value.amount <= 0
+    ):
+        return None
     if economics.economics_status is EconomicsStatus.INFEASIBLE:
         return 0.0
     if economics.economics_status is EconomicsStatus.PARTIAL:
