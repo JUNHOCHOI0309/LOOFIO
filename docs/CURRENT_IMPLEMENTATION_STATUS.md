@@ -2,7 +2,7 @@
 
 - 기준일: 2026-08-18
 - 기준 브랜치: `main`
-- `code_baseline_commit`: `b7cc45d58b1fe1faa592888fd63f652ce0174f4a`
+- `code_baseline_commit`: `37b4d05253a9325445742d7ec7a016cde88e6e79`
 - `source_document_alignment_commit`: `0c75e524af5e9baa896e5685103ce8afe858b5a0`
 - `document_alignment_commit`: `0adeaae5866f37afb679336d20c28c3cfb2e5e17`
 - 문서 패키지: `decision-intelligence-docs-v1`
@@ -83,7 +83,8 @@ ROI
 | Result | 구현 | 완료 Action의 실행 요약·측정 기간·실제 지출 기록 |
 | Measurement | MVP 구현 | `same-window-prior-four-weeks-v2`, 직전 1~4주 동일 길이 창 평균과 signed delta |
 | Dashboard | 구현 | Metric·Detector·Opportunity·Score·Recommendation·Action·Result·Measurement 표시 |
-| 회귀 검증 | 구현 | backend 66 tests, sample-pack 제품 루프, web typecheck/build |
+| Decision Input Contract | B01 구현 | immutable `DecisionField`, provenance·freshness, Decimal Money, LOW_DEMAND_SLOT `DecisionContextSnapshot`, D0~D4 Readiness, Missing Requirement, Hospital PII·tenant scope 검증 |
+| 회귀 검증 | 구현 | backend 87 tests, sample-pack 제품 루프, web typecheck/build |
 | CI | 구현 | GitHub Actions `Regression checks`, `feature/fix/test/ci`와 `main` push 검사 |
 
 ---
@@ -140,19 +141,20 @@ Action 효과
 | Action | `api/app/actions` |
 | Result·Measurement | `api/app/results` |
 | API schemas | `api/app/schemas` |
+| Decision Input Domain | `api/app/decisioning` |
 | PostgreSQL migration | `api/migrations` |
 | 회귀 테스트 | `api/tests` |
 
 ---
 
-## 6. Decision Intelligence 문서 상태
+## 6. Decision Intelligence 문서·구현 상태
 
-다음 문서 설계는 완료됐지만 코드·migration·test에는 아직 반영되지 않았다.
+Decision Intelligence 설계 문서는 완료됐다. 아래 구현 상태는 실제 code·test·migration 유무를 별도로 표시한다.
 
 | 영역 | 문서 상태 | 구현 상태 |
 |---|---|---|
 | Planning / Decision | Planning Index, Decision Register, Roadmap, Backlog 완료 | 미구현 |
-| Decision Input | D0~D4, 상태·출처·신선도 계약 완료 | 미구현 |
+| Decision Input | D0~D4, 상태·출처·신선도 계약 완료 | B01 순수 Domain 구현·21개 전용 테스트, API/persistence 미구현 |
 | Cause Analysis | Cause taxonomy·Evidence·Diagnostic·Score 설계 완료 | 미구현 |
 | Strategy | Hard Gate·대안 비교·DATA_COLLECTION·NO_ACTION 설계 완료 | 미구현 |
 | Playbook | Definition·Applicability·Instance, Hospital Core 12개 설계 완료 | 미구현 |
@@ -169,7 +171,7 @@ Action 효과
 
 ## 7. 아직 구현하지 않은 범위
 
-- Decision Context Snapshot과 D0~D4 Readiness
+- Decision Context Preview API·사용자 입력 UI·persistence
 - Cause Analysis와 Diagnostic Question
 - Strategy Engine, Hard Gate, Strategy Score
 - Versioned Playbook Registry Runtime과 Instance
@@ -196,11 +198,14 @@ Action 효과
 실제 로컬 구현은 `LOOFIO_IMPLEMENTATION_BACKLOG_V1.md`를 따른다.
 
 ```text
-B01 Decision Contract
+B01 Decision Contract 완료
 → DI-001~DI-005
-→ QA-001 / QA-003 / QA-004
+→ QA-001 / QA-003 / QA-004의 Domain 범위
 
-B02~B03 Cause Pure Domain / Preview / Regression
+B02 Cause Pure Domain
+→ CA-001~CA-009
+
+B03 Cause Preview / Regression
 
 B04~B05 Strategy Pure Domain / Preview / Regression
 
@@ -216,6 +221,35 @@ M8 Persistence
 ```
 
 AI는 deterministic Package와 Quality Preview가 안정된 뒤 별도 Epic으로 연결한다.
+
+### B01 구현 경계
+
+구현:
+
+```text
+DecisionField known/unknown/not_applicable/conflicting/stale/restricted
+known provenance·offset timestamp
+Money Decimal/KRW validation
+LOW_DEMAND_SLOT 최소 DecisionContextSnapshot
+canonical SHA-256 snapshot hash
+safe Hospital policy defaults
+D0~D4 deterministic Readiness
+구조화 Missing Requirement plan
+cross-tenant/business scope guard와 provenance validation
+Hospital PII·임상 필드 rejection
+LOW_DEMAND_SLOT Context·Opportunity·Package reference golden fixtures
+```
+
+의도적으로 제외:
+
+```text
+API endpoint
+database migration/persistence
+Cause/Strategy/Playbook/Experiment/Package runtime
+LLM 또는 외부 channel
+```
+
+B01 코드 기준 커밋은 `37b4d05253a9325445742d7ec7a016cde88e6e79`다.
 
 ---
 
