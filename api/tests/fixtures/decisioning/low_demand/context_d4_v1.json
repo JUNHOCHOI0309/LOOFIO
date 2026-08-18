@@ -1,0 +1,249 @@
+{
+  "contract_version": "decision-input-v1",
+  "hash_version": "decision-context-sha256-v1",
+  "tenant_id": "TENANT_FIXTURE_01",
+  "business_id": "BUSINESS_FIXTURE_01",
+  "location_id": "LOCATION_FIXTURE_01",
+  "opportunity_id": "OPPORTUNITY_LOW_DEMAND_01",
+  "snapshot_id": "SNAPSHOT_LOW_DEMAND_D4_01",
+  "snapshot_at": "2026-08-17T12:00:00+09:00",
+  "business_timezone": "Asia/Seoul",
+  "data_window_start": "2026-05-18T00:00:00+09:00",
+  "data_window_end": "2026-08-16T23:59:59+09:00",
+  "opportunity": {
+    "opportunity_type": "LOW_DEMAND_SLOT",
+    "detector_code": "LOW_DEMAND_SLOT",
+    "detector_version": "low-demand-revenue-gap-v2",
+    "evidence_refs": [
+      "EVIDENCE_LOW_DEMAND_TUE_14_01"
+    ],
+    "limitations": [
+      "Capacity is supplied by a manual business confirmation."
+    ]
+  },
+  "goal": {
+    "primary_goal": {
+      "status": "known",
+      "value": "FILL_LOW_DEMAND_SLOTS",
+      "source": {
+        "type": "user_entered",
+        "reference": "decision-context-form-v1",
+        "tenant_id": "TENANT_FIXTURE_01",
+        "business_id": "BUSINESS_FIXTURE_01"
+      },
+      "observed_at": "2026-08-17T12:00:00+09:00"
+    },
+    "no_discount_policy": true,
+    "manual_only": true
+  },
+  "operation": {
+    "target_weekday": "TUE",
+    "target_start_hour": 14,
+    "target_end_hour": 16,
+    "slot_capacity_confirmed": {
+      "status": "known",
+      "value": true,
+      "source": {
+        "type": "manual_verified",
+        "reference": "owner-capacity-confirmation-v1",
+        "tenant_id": "TENANT_FIXTURE_01",
+        "business_id": "BUSINESS_FIXTURE_01"
+      },
+      "observed_at": "2026-08-17T11:30:00+09:00"
+    },
+    "offering_available": {
+      "status": "known",
+      "value": true,
+      "source": {
+        "type": "manual_verified",
+        "reference": "offering-availability-v1",
+        "tenant_id": "TENANT_FIXTURE_01",
+        "business_id": "BUSINESS_FIXTURE_01"
+      },
+      "observed_at": "2026-08-17T11:30:00+09:00"
+    },
+    "target_population_count": {
+      "status": "known",
+      "value": 18,
+      "source": {
+        "type": "derived_metric",
+        "reference": "target-slot-population-v1",
+        "tenant_id": "TENANT_FIXTURE_01",
+        "business_id": "BUSINESS_FIXTURE_01"
+      },
+      "observed_at": "2026-08-17T10:00:00+09:00"
+    }
+  },
+  "offering": {
+    "offering_id": "OFFERING_FIXTURE_01",
+    "offering_name": "비식별 견본 진료",
+    "eligibility": {
+      "status": "known",
+      "value": "eligible",
+      "source": {
+        "type": "manual_verified",
+        "reference": "offering-policy-review-v1",
+        "tenant_id": "TENANT_FIXTURE_01",
+        "business_id": "BUSINESS_FIXTURE_01"
+      },
+      "observed_at": "2026-08-17T11:00:00+09:00"
+    }
+  },
+  "customer_activation": {
+    "customer_token_available": {
+      "status": "known",
+      "value": true,
+      "source": {
+        "type": "system_observed",
+        "reference": "token-capability-v1",
+        "tenant_id": "TENANT_FIXTURE_01",
+        "business_id": "BUSINESS_FIXTURE_01"
+      },
+      "observed_at": "2026-08-17T10:00:00+09:00"
+    },
+    "eligible_cohort_count": {
+      "status": "known",
+      "value": 72,
+      "source": {
+        "type": "derived_metric",
+        "reference": "eligible-cohort-query-v1",
+        "tenant_id": "TENANT_FIXTURE_01",
+        "business_id": "BUSINESS_FIXTURE_01"
+      },
+      "observed_at": "2026-08-17T10:00:00+09:00"
+    },
+    "marketing_consent_capability": {
+      "status": "known",
+      "value": "not_required_for_manual_review",
+      "source": {
+        "type": "policy_configuration",
+        "reference": "manual-review-consent-policy-v1",
+        "tenant_id": "TENANT_FIXTURE_01",
+        "business_id": "BUSINESS_FIXTURE_01"
+      },
+      "observed_at": "2026-08-17T12:00:00+09:00"
+    }
+  },
+  "channels": [
+    {
+      "channel_type": "MANUAL",
+      "connection_status": "available_manual",
+      "execution_mode": "manual",
+      "tracking_capability": "action_id",
+      "owner": {
+        "status": "known",
+        "value": "operations_manager",
+        "source": {
+          "type": "user_entered",
+          "reference": "decision-context-form-v1",
+          "tenant_id": "TENANT_FIXTURE_01",
+          "business_id": "BUSINESS_FIXTURE_01"
+        },
+        "observed_at": "2026-08-17T12:00:00+09:00"
+      }
+    }
+  ],
+  "economics": {
+    "economics_status": "complete",
+    "budget_cap": {
+      "status": "known",
+      "value": {"amount": "0.00", "currency": "KRW"},
+      "source": {
+        "type": "user_entered",
+        "reference": "manual-experiment-budget-v1",
+        "tenant_id": "TENANT_FIXTURE_01",
+        "business_id": "BUSINESS_FIXTURE_01"
+      },
+      "observed_at": "2026-08-17T12:00:00+09:00"
+    },
+    "expected_net_revenue_per_completion": {
+      "status": "known",
+      "value": {"amount": "80000.00", "currency": "KRW"},
+      "source": {
+        "type": "manual_verified",
+        "reference": "offering-economics-v1",
+        "tenant_id": "TENANT_FIXTURE_01",
+        "business_id": "BUSINESS_FIXTURE_01"
+      },
+      "observed_at": "2026-08-17T11:00:00+09:00"
+    },
+    "variable_cost_per_completion": {
+      "status": "known",
+      "value": {"amount": "20000.00", "currency": "KRW"},
+      "source": {
+        "type": "manual_verified",
+        "reference": "offering-economics-v1",
+        "tenant_id": "TENANT_FIXTURE_01",
+        "business_id": "BUSINESS_FIXTURE_01"
+      },
+      "observed_at": "2026-08-17T11:00:00+09:00"
+    },
+    "benefit_cost_per_completion": {"status": "not_applicable"},
+    "incremental_service_cost_per_completion": {
+      "status": "known",
+      "value": {"amount": "5000.00", "currency": "KRW"},
+      "source": {
+        "type": "manual_verified",
+        "reference": "offering-economics-v1",
+        "tenant_id": "TENANT_FIXTURE_01",
+        "business_id": "BUSINESS_FIXTURE_01"
+      },
+      "observed_at": "2026-08-17T11:00:00+09:00"
+    },
+    "media_cost": {"status": "not_applicable"},
+    "message_cost": {"status": "not_applicable"},
+    "partner_cost": {"status": "not_applicable"},
+    "staff_time_cost": {
+      "status": "known",
+      "value": {"amount": "10000.00", "currency": "KRW"},
+      "source": {
+        "type": "user_entered",
+        "reference": "staff-cost-estimate-v1",
+        "tenant_id": "TENANT_FIXTURE_01",
+        "business_id": "BUSINESS_FIXTURE_01"
+      },
+      "observed_at": "2026-08-17T12:00:00+09:00"
+    }
+  },
+  "measurement": {
+    "period_start": {
+      "status": "known",
+      "value": "2026-08-24T00:00:00+09:00",
+      "source": {"type": "user_entered", "reference": "experiment-window-v1", "tenant_id": "TENANT_FIXTURE_01", "business_id": "BUSINESS_FIXTURE_01"},
+      "observed_at": "2026-08-17T12:00:00+09:00"
+    },
+    "period_end": {
+      "status": "known",
+      "value": "2026-09-07T00:00:00+09:00",
+      "source": {"type": "user_entered", "reference": "experiment-window-v1", "tenant_id": "TENANT_FIXTURE_01", "business_id": "BUSINESS_FIXTURE_01"},
+      "observed_at": "2026-08-17T12:00:00+09:00"
+    },
+    "result_source": {
+      "status": "known",
+      "value": "normalized_completed_appointments",
+      "source": {"type": "system_observed", "reference": "appointment-metric-store-v1", "tenant_id": "TENANT_FIXTURE_01", "business_id": "BUSINESS_FIXTURE_01"},
+      "observed_at": "2026-08-17T12:00:00+09:00"
+    },
+    "baseline_available": {
+      "status": "known",
+      "value": true,
+      "source": {"type": "derived_metric", "reference": "prior-four-weeks-v1", "tenant_id": "TENANT_FIXTURE_01", "business_id": "BUSINESS_FIXTURE_01"},
+      "observed_at": "2026-08-17T10:00:00+09:00"
+    },
+    "action_level_tracking": {
+      "status": "known",
+      "value": true,
+      "source": {"type": "system_observed", "reference": "manual-action-id-v1", "tenant_id": "TENANT_FIXTURE_01", "business_id": "BUSINESS_FIXTURE_01"},
+      "observed_at": "2026-08-17T12:00:00+09:00"
+    },
+    "actual_spend_available": {
+      "status": "known",
+      "value": true,
+      "source": {"type": "manual_verified", "reference": "result-cost-form-v1", "tenant_id": "TENANT_FIXTURE_01", "business_id": "BUSINESS_FIXTURE_01"},
+      "observed_at": "2026-08-17T12:00:00+09:00"
+    }
+  },
+  "limitations": [
+    "This fixture contains aggregate and token-free inputs only."
+  ]
+}

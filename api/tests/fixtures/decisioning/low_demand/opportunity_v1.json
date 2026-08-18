@@ -1,0 +1,19 @@
+{
+  "fixture_version": "low-demand-opportunity-fixture-v1",
+  "tenant_id": "TENANT_FIXTURE_01",
+  "business_id": "BUSINESS_FIXTURE_01",
+  "opportunity_id": "OPPORTUNITY_LOW_DEMAND_01",
+  "type": "LOW_DEMAND_SLOT",
+  "detector": {
+    "code": "LOW_DEMAND_SLOT",
+    "version": "low-demand-revenue-gap-v2"
+  },
+  "evidence_refs": ["EVIDENCE_LOW_DEMAND_TUE_14_01"],
+  "observation": {
+    "weekday": "TUE",
+    "slot_start_hour": 14,
+    "observed_weeks": 12,
+    "demand_index": "0.54"
+  },
+  "limitations": ["Capacity is not derived from appointment demand."]
+}
