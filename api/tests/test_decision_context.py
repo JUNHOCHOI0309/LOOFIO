@@ -69,7 +69,7 @@ def test_snapshot_requires_offset_timestamps_and_valid_period_order() -> None:
 
 def test_golden_fixture_checksums_and_source_ids_are_stable() -> None:
     expected = {
-        "context_d4_v1.json": "ca285ffd5276ffd7c7366fbc95fdd025c23e6b0a89b1ce4824fbaca6f00bfe76",
+        "context_d4_v1.json": "035f08dbd33fa29e1105ad3c899ba5aebe82ac21e96d9923e04489389e57e870",
         "opportunity_v1.json": "e73f067a02dd56e2d61d7613fc7510835e1e934f4dc5eec59868d26f93ef996b",
         "package_reference_v1.json": "f032f6ed07422ea0b86e7ba96aab1bf04338454951f905d859431ae8c0cfd8e9",
     }

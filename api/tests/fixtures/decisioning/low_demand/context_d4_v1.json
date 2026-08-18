@@ -21,6 +21,12 @@
       "Capacity is supplied by a manual business confirmation."
     ]
   },
+  "observation": {
+    "observed_weeks": 12,
+    "average_appointments_per_week": 2.0,
+    "comparison_median_per_week": 4.0,
+    "demand_index": 0.5
+  },
   "goal": {
     "primary_goal": {
       "status": "known",
@@ -35,6 +41,14 @@
     },
     "no_discount_policy": true,
     "manual_only": true
+  },
+  "business_constraints": {
+    "business_hours": {
+      "status": "known",
+      "value": true,
+      "source": {"type": "manual_verified", "reference": "business-hours-v1", "tenant_id": "TENANT_FIXTURE_01", "business_id": "BUSINESS_FIXTURE_01"},
+      "observed_at": "2026-08-17T11:30:00+09:00"
+    }
   },
   "operation": {
     "target_weekday": "TUE",
@@ -87,6 +101,18 @@
         "business_id": "BUSINESS_FIXTURE_01"
       },
       "observed_at": "2026-08-17T11:00:00+09:00"
+    },
+    "target_slot_available": {
+      "status": "known",
+      "value": true,
+      "source": {"type": "manual_verified", "reference": "offering-slot-availability-v1", "tenant_id": "TENANT_FIXTURE_01", "business_id": "BUSINESS_FIXTURE_01"},
+      "observed_at": "2026-08-17T11:00:00+09:00"
+    },
+    "target_slot_visible": {
+      "status": "known",
+      "value": false,
+      "source": {"type": "manual_verified", "reference": "booking-visibility-audit-v1", "tenant_id": "TENANT_FIXTURE_01", "business_id": "BUSINESS_FIXTURE_01"},
+      "observed_at": "2026-08-17T11:00:00+09:00"
     }
   },
   "customer_activation": {
@@ -122,6 +148,18 @@
         "business_id": "BUSINESS_FIXTURE_01"
       },
       "observed_at": "2026-08-17T12:00:00+09:00"
+    },
+    "completed_visit_history_available": {
+      "status": "known",
+      "value": true,
+      "source": {"type": "system_observed", "reference": "completed-visit-history-v1", "tenant_id": "TENANT_FIXTURE_01", "business_id": "BUSINESS_FIXTURE_01"},
+      "observed_at": "2026-08-17T10:00:00+09:00"
+    },
+    "revisit_interval_available": {
+      "status": "known",
+      "value": true,
+      "source": {"type": "derived_metric", "reference": "revisit-interval-v1", "tenant_id": "TENANT_FIXTURE_01", "business_id": "BUSINESS_FIXTURE_01"},
+      "observed_at": "2026-08-17T10:00:00+09:00"
     }
   },
   "channels": [
@@ -241,6 +279,52 @@
       "value": true,
       "source": {"type": "manual_verified", "reference": "result-cost-form-v1", "tenant_id": "TENANT_FIXTURE_01", "business_id": "BUSINESS_FIXTURE_01"},
       "observed_at": "2026-08-17T12:00:00+09:00"
+    }
+  },
+  "data_quality": {
+    "import_status": {
+      "status": "known",
+      "value": "completed",
+      "source": {"type": "system_observed", "reference": "import-run-v1", "tenant_id": "TENANT_FIXTURE_01", "business_id": "BUSINESS_FIXTURE_01"},
+      "observed_at": "2026-08-17T10:00:00+09:00"
+    },
+    "validation_status": {
+      "status": "known",
+      "value": "valid",
+      "source": {"type": "system_observed", "reference": "import-validation-v1", "tenant_id": "TENANT_FIXTURE_01", "business_id": "BUSINESS_FIXTURE_01"},
+      "observed_at": "2026-08-17T10:00:00+09:00"
+    },
+    "source_lineage_available": {
+      "status": "known",
+      "value": true,
+      "source": {"type": "system_observed", "reference": "source-lineage-v1", "tenant_id": "TENANT_FIXTURE_01", "business_id": "BUSINESS_FIXTURE_01"},
+      "observed_at": "2026-08-17T10:00:00+09:00"
+    },
+    "data_freshness_at": {
+      "status": "known",
+      "value": "2026-08-17T10:00:00+09:00",
+      "source": {"type": "system_observed", "reference": "import-freshness-v1", "tenant_id": "TENANT_FIXTURE_01", "business_id": "BUSINESS_FIXTURE_01"},
+      "observed_at": "2026-08-17T10:00:00+09:00"
+    },
+    "timezone_validation_status": {
+      "status": "known",
+      "value": "valid",
+      "source": {"type": "system_observed", "reference": "timezone-validation-v1", "tenant_id": "TENANT_FIXTURE_01", "business_id": "BUSINESS_FIXTURE_01"},
+      "observed_at": "2026-08-17T10:00:00+09:00"
+    },
+    "offering_resolution_rate": {
+      "status": "known",
+      "value": 1.0,
+      "source": {"type": "derived_metric", "reference": "offering-resolution-v1", "tenant_id": "TENANT_FIXTURE_01", "business_id": "BUSINESS_FIXTURE_01"},
+      "observed_at": "2026-08-17T10:00:00+09:00"
+    }
+  },
+  "cause_signals": {
+    "broader_demand_proxy_available": {
+      "status": "known",
+      "value": true,
+      "source": {"type": "derived_metric", "reference": "broader-demand-proxy-v1", "tenant_id": "TENANT_FIXTURE_01", "business_id": "BUSINESS_FIXTURE_01"},
+      "observed_at": "2026-08-17T10:00:00+09:00"
     }
   },
   "limitations": [

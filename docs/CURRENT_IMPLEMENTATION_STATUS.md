@@ -2,7 +2,7 @@
 
 - 기준일: 2026-08-18
 - 기준 브랜치: `main`
-- `code_baseline_commit`: `37b4d05253a9325445742d7ec7a016cde88e6e79`
+- `code_baseline_commit`: `3caa72a8a6f1b63d2d3d3970b02396aeae10fdd1`
 - `source_document_alignment_commit`: `0c75e524af5e9baa896e5685103ce8afe858b5a0`
 - `document_alignment_commit`: `0adeaae5866f37afb679336d20c28c3cfb2e5e17`
 - 문서 패키지: `decision-intelligence-docs-v1`
@@ -84,7 +84,8 @@ ROI
 | Measurement | MVP 구현 | `same-window-prior-four-weeks-v2`, 직전 1~4주 동일 길이 창 평균과 signed delta |
 | Dashboard | 구현 | Metric·Detector·Opportunity·Score·Recommendation·Action·Result·Measurement 표시 |
 | Decision Input Contract | B01 구현 | immutable `DecisionField`, provenance·freshness, Decimal Money, LOW_DEMAND_SLOT `DecisionContextSnapshot`, D0~D4 Readiness, Missing Requirement, Hospital PII·tenant scope 검증 |
-| 회귀 검증 | 구현 | backend 87 tests, sample-pack 제품 루프, web typecheck/build |
+| Cause Analysis | B02 순수 Domain 구현 | LOW_DEMAND_SLOT 6개 core/4개 conditional taxonomy, R/O/B requirement, Data Quality gate, Evidence/Contradiction, deterministic Cause Priority Score, Diagnostic Question, Cause→Strategy handoff |
+| 회귀 검증 | 구현 | backend 95 tests, sample-pack 제품 루프, web typecheck/build |
 | CI | 구현 | GitHub Actions `Regression checks`, `feature/fix/test/ci`와 `main` push 검사 |
 
 ---
@@ -142,6 +143,7 @@ Action 효과
 | Result·Measurement | `api/app/results` |
 | API schemas | `api/app/schemas` |
 | Decision Input Domain | `api/app/decisioning` |
+| Cause Analysis Domain | `api/app/decisioning/causes` |
 | PostgreSQL migration | `api/migrations` |
 | 회귀 테스트 | `api/tests` |
 
@@ -155,7 +157,7 @@ Decision Intelligence 설계 문서는 완료됐다. 아래 구현 상태는 실
 |---|---|---|
 | Planning / Decision | Planning Index, Decision Register, Roadmap, Backlog 완료 | 미구현 |
 | Decision Input | D0~D4, 상태·출처·신선도 계약 완료 | B01 순수 Domain 구현·21개 전용 테스트, API/persistence 미구현 |
-| Cause Analysis | Cause taxonomy·Evidence·Diagnostic·Score 설계 완료 | 미구현 |
+| Cause Analysis | Cause taxonomy·Evidence·Diagnostic·Score 설계 완료 | B02 순수 Domain 구현·8개 전용 테스트, Preview API/persistence 미구현 |
 | Strategy | Hard Gate·대안 비교·DATA_COLLECTION·NO_ACTION 설계 완료 | 미구현 |
 | Playbook | Definition·Applicability·Instance, Hospital Core 12개 설계 완료 | 미구현 |
 | Experiment | Method·Grade·Precision·Success·Stop 계약 완료 | 미구현 |
@@ -172,7 +174,7 @@ Decision Intelligence 설계 문서는 완료됐다. 아래 구현 상태는 실
 ## 7. 아직 구현하지 않은 범위
 
 - Decision Context Preview API·사용자 입력 UI·persistence
-- Cause Analysis와 Diagnostic Question
+- Cause Preview API·HTTP 회귀·사용자 입력 UI
 - Strategy Engine, Hard Gate, Strategy Score
 - Versioned Playbook Registry Runtime과 Instance
 - Experiment Definition·Assignment·Evaluation
@@ -202,10 +204,11 @@ B01 Decision Contract 완료
 → DI-001~DI-005
 → QA-001 / QA-003 / QA-004의 Domain 범위
 
-B02 Cause Pure Domain
+B02 Cause Pure Domain 완료
 → CA-001~CA-009
 
 B03 Cause Preview / Regression
+→ CA-010~CA-012
 
 B04~B05 Strategy Pure Domain / Preview / Regression
 
@@ -250,6 +253,32 @@ LLM 또는 외부 channel
 ```
 
 B01 코드 기준 커밋은 `37b4d05253a9325445742d7ec7a016cde88e6e79`다.
+
+### B02 구현 경계
+
+구현:
+
+```text
+LOW_DEMAND_SLOT core Cause 6개와 조건부 Cause 4개 registry
+Required / Optional / Blocking 입력 규칙
+DataQualityContext와 critical conflict gate
+Evidence·Contradiction source reference mapping
+REVIEWABLE / NEEDS_DATA / DEPRIORITIZED / BLOCKED 상태
+Cause Priority Score v1 (35/20/20/15/10)
+PII 없는 Diagnostic Question과 deterministic 정렬
+CauseAnalysisResult 및 Strategy handoff contract
+```
+
+의도적으로 제외:
+
+```text
+Cause Preview API와 저장
+Raw CSV 또는 import repository 직접 접근
+LLM cause wording·scoring
+Strategy 선택·Playbook 실행
+```
+
+B02 코드 기준 커밋은 `3caa72a8a6f1b63d2d3d3970b02396aeae10fdd1`다.
 
 ---
 
