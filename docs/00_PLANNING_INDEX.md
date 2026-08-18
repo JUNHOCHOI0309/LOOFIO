@@ -722,6 +722,7 @@ Execution approval / tracking / idempotency
 0024-measurement-meaning-separation.md
 0025-channel-execution-levels.md
 0026-cause-analysis-preview-api.md
+0027-strategy-preview-api.md
 ```
 
 ADR은 “현재 구현 여부”가 아니라 해당 시점의 결정과 근거를 보존한다.
