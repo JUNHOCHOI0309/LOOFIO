@@ -1,151 +1,245 @@
-# LOOFIO Prohibited Changes v1
+# LOOFIO Prohibited Changes v2
 
-현재 구현 범위와 미구현 안전 경계는 `CURRENT_IMPLEMENTATION_STATUS.md`를 함께 참조한다. 특히 실제 AI provider와 외부 채널은 아직 연결되지 않았으며, 이 문서의 승인·PII·자동화 금지 규칙을 충족하는 별도 설계 없이는 추가하지 않는다.
+- 기준일: 2026-08-18
+- 기준 커밋: `0c75e524af5e9baa896e5685103ce8afe858b5a0`
 
-이 문서는 LOOFIO에서 **코드가 동작하더라도 허용하지 않는 변경**을 명시한다.
+이 문서는 코드가 동작하더라도 허용하지 않는 변경을 정의한다.
 
----
-
-# 1. AI / Analytics
-
-## 금지
-
-- 원본 예약/매출 수천 건을 LLM에 직접 넣고 Opportunity를 찾게 하기
-- LLM이 매출, ROI, 증감률, 취소율, 가동률을 최종 계산하기
-- AI 설명이 deterministic 수치를 덮어쓰기
-- Detector에 AI provider SDK를 import하기
-- 데이터 부족을 숨기고 높은 Confidence로 표현하기
-- Estimate를 실제 발생 매출로 표현하기
-- 추천 효과를 보장값으로 표현하기
+특히 Opportunity 이후의 **Decision Intelligence** (Cause Analysis → Strategy → Playbook → Experiment → Recommendation Package)가 일반 조언이나 검증되지 않은 AI 출력으로 퇴행하지 않도록 한다.
 
 ---
 
-# 2. Data / Tenant
+# 1. Analytics / Opportunity
 
-## 금지
+금지:
+
+- Raw Appointment/매출 데이터를 LLM에 넣고 문제를 찾게 하기
+- LLM이 Metric·Detector·Score를 최종 계산하기
+- Detector가 Cause·Strategy·Channel·Playbook을 선택하기
+- Estimate를 Actual Revenue 또는 확정 손실로 표시하기
+- score를 성공 확률로 표시하기
+- limitations를 숨기기
+- version 변경 없이 계산 의미 변경하기
+
+---
+
+# 2. Cause Analysis
+
+금지:
+
+- Cause를 사실로 확정하기
+- Evidence reference 없는 cause candidate
+- contradiction/missing data 생략
+- `DATA_QUALITY_ARTIFACT` 가능성 미검토
+- 환자 임상정보로 마케팅 원인을 추론
+- 다른 tenant 데이터로 cause 생성
+- External Context만으로 인과 단정
+
+---
+
+# 3. Strategy / Playbook
+
+금지:
+
+- 최소 대안 비교 없이 1순위 전략 선택
+- 단일 후보 사유 미기록
+- `NO_ACTION`, `DATA_COLLECTION`, `CAPACITY_OPERATION`을 배제
+- AI 자유형 아이디어를 versioned Playbook처럼 취급
+- Playbook definition에 tenant/customer/runtime budget 하드코딩
+- precondition/contraindication 없는 Playbook
+- 정책 검토 없이 Hospital Playbook 활성화
+- 일반 조언을 최종 Recommendation으로 표시
+
+일반 조언 예:
+
+```text
+SNS를 강화하세요.
+전단지를 돌리세요.
+프로모션을 해보세요.
+고객에게 연락하세요.
+```
+
+---
+
+# 4. Economics / Feasibility
+
+금지:
+
+- `unknown` cost를 0으로 계산
+- 마진 없이 순기여이익 표시
+- benefit/discount cost 누락
+- staff time을 무조건 0으로 처리
+- 예산 상한 없는 유료 Action
+- 비용 근거 없는 ROI/CAC
+- capacity 제약을 무시한 수요 확대 추천
+- Action 실행 후에 경제성 가정을 조용히 변경
+
+---
+
+# 5. Experiment / Measurement
+
+금지:
+
+- success threshold 없는 실행
+- stop condition 없는 실행
+- primary metric 없는 실행
+- result source 없는 실행
+- 실행 후 primary metric·threshold 변경
+- Grade C/D를 Incremental Revenue로 표현
+- 단순 전후 상승을 전부 LOOFIO 효과로 주장
+- target slot 증가와 다른 slot 감소를 신규 매출로 중복 계산
+- 비용 미수집을 비용 0으로 해석
+- 데이터 실패와 효과 없음 혼합
+
+---
+
+# 6. Recommendation Quality
+
+금지:
+
+- Quality Score 75 미만 결과를 final recommendation으로 표시
+- Hard Fail이 있는 package를 `READY_FOR_REVIEW`로 표시
+- LLM 자기평가를 Quality Score Source of Truth로 사용
+- Evidence와 무관한 수치·문장
+- target/channel/period/budget/owner/measurement가 없는 plan
+- 대안 제외 이유 누락
+- Quality Gate를 일반 사용자가 override
+- validator version 미기록
+
+---
+
+# 7. AI
+
+금지:
+
+- business logic에 특정 provider/model 하드코딩
+- AI가 수치·비용·기여이익·실험 결과 생성
+- raw PII/clinical data 전송
+- 다른 tenant context 혼합
+- provider output을 validator 없이 저장·노출
+- 무한 retry
+- AI 실패로 Opportunity 삭제
+- AI 설명이 deterministic evidence를 덮어쓰기
+
+---
+
+# 8. Data / Tenant
+
+금지:
 
 - tenant scope 없는 repository query
-- 다른 고객사의 데이터를 같은 AI/RAG context에 혼합
-- tenant/business 구분 없는 cache key
-- tenant 구분 없는 파일 저장 경로
-- customer phone/email 평문을 내부 공통 customer key로 사용
-- 고객 연락처/상담 원문을 필요성 검토 없이 외부 AI에 전달
-- 다른 business의 customer를 자동으로 동일인으로 병합
-- 공식 taxonomy 원본을 LOOFIO 해석값으로 덮어쓰기
+- tenant/business 없는 cache/file path
+- 다른 business customer 자동 병합
+- phone/email 평문을 공통 customer key로 사용
+- patient name, resident ID, diagnosis, medical record 장기 분석 저장
+- 공식 taxonomy를 LOOFIO mapping으로 덮어쓰기
+- source lineage 제거
+- Action target/export 무기한 보존
 
 ---
 
-# 3. Database
+# 9. Architecture / Dependency
 
-## 금지
+금지:
 
-- 운영 DB에서 migration 없이 직접 schema 수정
-- 데이터 손실 가능성이 있는 컬럼/테이블 즉시 삭제
-- Detector/Metric 의미를 바꾸고 version을 유지
-- 핵심 필드를 편의상 모두 JSONB로 이동
-- source lineage를 제거하는 정규화
-- 실제 매출과 추정 매출을 같은 컬럼 의미로 사용
-
----
-
-# 4. API
-
-## 금지
-
-- `/api/v1` 필드 삭제/타입 변경을 조용히 배포
-- status/enum 의미를 기존 client와 다르게 변경
-- client가 DB table 구조를 알아야만 사용할 수 있는 API
-- stack trace/secret/token 반환
-- authorization을 frontend에만 의존
-- 외부 실행 POST에 중복 방지 고려 없이 side effect 수행
+- UI→DB 직접 접근
+- Domain→provider SDK 직접 접근
+- Cause→Raw Import 직접 접근
+- Strategy→AI provider 직접 접근
+- Experiment metric을 AI text로 정의
+- Orchestrator가 Detector/Metric 재계산
+- Connector가 Opportunity/Strategy 판단
+- Measurement가 Recommendation text를 사실로 사용
+- 순환 의존을 DI로 숨기기
+- `common/utils`에 Decision rule 이동
 
 ---
 
-# 5. Architecture
+# 10. API / Database
 
-## 금지
+금지:
 
-- UI에서 DB 직접 접근
-- Domain에서 외부 provider SDK 직접 호출
-- Metric/Detector에서 HTTP 호출
-- Connector에서 Opportunity 판단
-- Connector에서 Incrementality 계산
-- AI text를 Measurement의 source of truth로 사용
-- 순환 dependency를 DI container로 숨기기
-- `utils/common`에 비즈니스 규칙을 무분별하게 이동
+- `/api/v1` 기존 필드·의미·enum 조용한 변경
+- current `/recommendations/draft` 즉시 삭제
+- legacy Action/Measurement 의미 즉시 변경
+- migration 없는 운영 DDL
+- destructive change 즉시 배포
+- 핵심 field를 모두 JSONB로 이동
+- current history를 새 version 의미로 재해석
+- idempotency 없이 외부 side effect 실행
 
 ---
 
-# 6. Product Safety
+# 11. Product Safety / Channel Execution
 
-MVP에서 사용자 승인 없이 금지:
+MVP에서 승인 없이 금지:
 
-- 광고비 증액/집행
-- 고객 메시지 발송
-- 게시물 발행
-- 쿠폰 활성화
+- 메시지 발송
+- 광고 집행/증액
+- 게시
+- 쿠폰/혜택 활성화
+- 제휴 비용 확정
 - 리뷰/문의 자동 답변
-- 외부 계정 설정 변경
+- 외부 계정 변경
 
-향후 자동화를 도입하려면 별도 안전범위, 예산 상한, 감사로그, rollback, 사용자 설정이 필요하다.
+금지:
 
----
-
-# 7. Measurement
-
-## 금지
-
-- 단순 전후 매출 상승을 모두 LOOFIO 효과라고 주장
-- 외부 행사/계절/날씨 가능성을 무시하고 인과관계 단정
-- baseline 없이 Incremental Revenue를 실제값처럼 표시
-- measurement method/version 미기록
-- action/result 연결 없이 효과 주장
+- tracking 없는 온라인/오프라인 실행
+- partner/printed material을 source code 없이 효과 측정
+- hard budget cap 없는 paid action
+- 실제 audience/spend/result reference 미수집
 
 ---
 
-# 8. Deployment / Operations
+# 12. Deployment / Operations
 
-## 금지
+금지:
 
-- main branch에서 검증 없이 직접 production 반영
-- production secret을 repository에 commit
-- migration rollback/forward 전략 없이 위험 migration 배포
-- 실패한 deployment를 성공으로 표시
-- 운영 hotfix를 코드 저장소에 되돌려 반영하지 않음
+- 검증 없이 main→production
+- secret commit/log/frontend 노출
+- migration 전략 없는 배포
+- intelligence version 변경 미기록
+- Quality regression 없이 Recommendation 배포
+- 운영 hotfix를 repository에 미반영
 - production DB 수동 변경 후 migration 미작성
+- 실패 deployment를 성공 표시
 
 ---
 
-# 9. Ownership / Review
+# 13. Ownership / Review
 
-리뷰 없이 금지:
+필수 리뷰 없이 금지:
 
-- tenant/auth
-- DB destructive migration
-- Detector 공식
-- Opportunity Score/Confidence
-- 외부 AI로 전송하는 개인정보 범위
-- 광고/메시지 자동 실행
-- API breaking change
+- Detector/Score
+- Cause taxonomy/score
+- Strategy mapping/score
+- Playbook 신규/ACTIVE 승격
+- Economics formula
+- Experiment method/Evidence Grade
+- Quality Bar
+- AI context/provider/schema
+- Hospital policy
+- external execution
 - Measurement/Incrementality
-- AGENTS/Prohibited Changes 수정
-
-1인 개발 단계에서는 PR 또는 변경기록에 위험 관점 자기검토를 남긴다.
+- tenant/auth/PII
+- API breaking change
+- destructive migration
+- governance docs
 
 ---
 
-# 10. 금지 규칙 예외
+# 14. 예외
 
-예외가 필요한 경우 코드에서 조용히 우회하지 않는다.
+예외는 코드에서 조용히 우회하지 않는다.
 
-필수:
+필수 기록:
 
 1. 이유
 2. 영향
-3. 대안 검토
-4. 보안/데이터 영향
-5. rollback
-6. 만료일 또는 재검토일
-7. 관련 문서 수정
-
-을 ADR 또는 명시적 예외 문서로 남긴다.
+3. 대안
+4. tenant/PII/security 영향
+5. economics/measurement 영향
+6. rollback/disable
+7. 만료·재검토일
+8. owner
+9. 관련 문서·ADR

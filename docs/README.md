@@ -1,68 +1,115 @@
-# LOOFIO Project Governance v1
+# LOOFIO Documentation
 
-이 디렉터리는 LOOFIO의 제품 기획을 실제 개발 규칙으로 고정하기 위한 프로젝트 운영 문서 묶음이다.
+LOOFIO 문서의 단일 진입점은 [`00_PLANNING_INDEX.md`](00_PLANNING_INDEX.md)다.
 
-## 기준 문서
+현재 구현과 목표 설계를 먼저 구분한다.
 
-이 운영 문서는 다음 LOOFIO 기획 문서를 기준으로 작성되었다.
+```text
+현재 구현
+→ migration / code / tests
+→ CURRENT_IMPLEMENTATION_STATUS.md
 
-- `LOOFIO_TECH_ROADMAP_v1.md`
-- `LOOFIO_BUSINESS_TAXONOMY_V1.md`
-- `LOOFIO_DATA_SCHEMA_V1.md`
-- `LOOFIO_OPPORTUNITY_ENGINE_V1.md`
-- `CURRENT_IMPLEMENTATION_STATUS.md`
+목표 설계
+→ Decision Intelligence 상세 문서
+→ 아직 구현으로 간주하지 않음
+```
 
-## 문서 목록
+## 1. 처음 읽는 순서
 
-| 파일 | 역할 |
+1. [`00_PLANNING_INDEX.md`](00_PLANNING_INDEX.md)
+2. [`CURRENT_IMPLEMENTATION_STATUS.md`](CURRENT_IMPLEMENTATION_STATUS.md)
+3. [`DECISION_REGISTER_V2.md`](DECISION_REGISTER_V2.md)
+4. [`LOOFIO_IMPLEMENTATION_ROADMAP_V2.md`](LOOFIO_IMPLEMENTATION_ROADMAP_V2.md)
+5. [`LOOFIO_IMPLEMENTATION_BACKLOG_V1.md`](LOOFIO_IMPLEMENTATION_BACKLOG_V1.md)
+
+## 2. 현재 구현 기준
+
+| 문서 | 역할 |
 |---|---|
-| `docs/CURRENT_IMPLEMENTATION_STATUS.md` | 실제 구현·검증·미구현 범위의 현재 기준 |
-| `docs/LOOFIO_DATA_SCHEMA_V1.md` | migration 기준 현재 PostgreSQL 데이터 모델 |
-| `AGENTS.md` | 저장소 전체 개발 규칙과 AI/사람 개발자 공통 지침 |
-| `docs/ARCHITECTURE.md` | 시스템 경계, 데이터 흐름, 모듈 역할 |
-| `docs/DEPENDENCY_RULES.md` | 모듈 간 허용/금지 의존성 |
-| `docs/CODE_OWNERSHIP.md` | 논리적 코드 오너십 및 리뷰 책임 |
-| `docs/API_CONTRACT.md` | API 호환성·버전·리소스 계약 |
-| `docs/PROHIBITED_CHANGES.md` | 명시적으로 금지하는 변경 |
-| `docs/DEPLOYMENT_FLOW.md` | 개발→검증→스테이징→운영 배포 흐름 |
-| `.github/CODEOWNERS.template` | 실제 GitHub CODEOWNERS 작성용 템플릿 |
+| [`CURRENT_IMPLEMENTATION_STATUS.md`](CURRENT_IMPLEMENTATION_STATUS.md) | 현재 제공 기능·미구현 범위 |
+| [`API_CONTRACT.md`](API_CONTRACT.md) | 현재 FastAPI `/api/v1` 계약 |
+| [`LOOFIO_DATA_SCHEMA_V1.md`](LOOFIO_DATA_SCHEMA_V1.md) | 현재 `api/migrations/0001~0011` 요약 |
+| [`LOOFIO_OPPORTUNITY_ENGINE_V1.md`](LOOFIO_OPPORTUNITY_ENGINE_V1.md) | 현재 Metric·Detector·Opportunity 의미 |
+| [`LOOFIO_HOSPITAL_MVP_DECISIONS_v1.md`](LOOFIO_HOSPITAL_MVP_DECISIONS_v1.md) | Hospital MVP 결정 |
+| [`adr/`](adr/) | 시점별 구현 결정 기록 |
 
-## 문서 우선순위
+## 3. Decision Intelligence 목표 설계
 
-충돌 시 다음 순서를 따른다.
+### 입력·원인·전략
 
-1. 법적·보안 요구사항
-2. `AGENTS.md`
-3. `docs/PROHIBITED_CHANGES.md`
-4. `docs/API_CONTRACT.md`
-5. `docs/CURRENT_IMPLEMENTATION_STATUS.md` — 구현 여부 판단에 한함
-6. `docs/ARCHITECTURE.md`
-7. `docs/DEPENDENCY_RULES.md`
-8. `docs/CODE_OWNERSHIP.md`
-9. `docs/DEPLOYMENT_FLOW.md`
-10. 개별 구현 문서와 코드 주석
+- [`LOOFIO_DECISION_INPUT_CONTRACT_V1.md`](LOOFIO_DECISION_INPUT_CONTRACT_V1.md)
+- [`LOOFIO_CAUSE_ANALYSIS_ENGINE_V1.md`](LOOFIO_CAUSE_ANALYSIS_ENGINE_V1.md)
+- [`LOOFIO_CAUSE_INPUT_REQUIREMENTS_V1.md`](LOOFIO_CAUSE_INPUT_REQUIREMENTS_V1.md)
+- [`LOOFIO_STRATEGY_ENGINE_V1.md`](LOOFIO_STRATEGY_ENGINE_V1.md)
+- [`LOOFIO_CAUSE_TO_STRATEGY_MAPPING_V1.md`](LOOFIO_CAUSE_TO_STRATEGY_MAPPING_V1.md)
 
-제품 정의나 데이터 모델 자체를 바꿔야 한다면 운영 문서를 우회해서 코드부터 수정하지 않는다. 먼저 관련 기획 문서와 본 운영 문서를 함께 갱신한다.
+### 실행 지식·실험
 
-## 현재 확정된 구현 선택
+- [`LOOFIO_ACTION_PLAYBOOK_V1.md`](LOOFIO_ACTION_PLAYBOOK_V1.md)
+- [`LOOFIO_HOSPITAL_ACTION_PLAYBOOK_CATALOG_V1.md`](LOOFIO_HOSPITAL_ACTION_PLAYBOOK_CATALOG_V1.md)
+- [`LOOFIO_EXPERIMENT_DESIGN_V1.md`](LOOFIO_EXPERIMENT_DESIGN_V1.md)
+- [`LOOFIO_PLAYBOOK_EXPERIMENT_MAPPING_V1.md`](LOOFIO_PLAYBOOK_EXPERIMENT_MAPPING_V1.md)
 
-- Frontend: Next.js 16 / React / TypeScript
-- Backend: FastAPI / Pydantic / psycopg
-- Database: PostgreSQL 16
-- Authentication: Google·Naver direct OAuth와 서버 저장 세션
-- CI: GitHub Actions regression workflow
-- Local orchestration: Docker Compose PostgreSQL
+### 최종 결과·품질·성과
 
-결정 근거와 변경 이력은 `docs/adr`에 보존한다.
+- [`LOOFIO_RECOMMENDATION_PACKAGE_V2.md`](LOOFIO_RECOMMENDATION_PACKAGE_V2.md)
+- [`LOOFIO_RECOMMENDATION_QUALITY_BAR_V1.md`](LOOFIO_RECOMMENDATION_QUALITY_BAR_V1.md)
+- [`LOOFIO_MEASUREMENT_FRAMEWORK_V1.md`](LOOFIO_MEASUREMENT_FRAMEWORK_V1.md)
+- [`LOOFIO_CHANNEL_EXECUTION_V1.md`](LOOFIO_CHANNEL_EXECUTION_V1.md)
+- [`LOOFIO_CHANNEL_CAPABILITY_AND_EVENT_MATRIX_V1.md`](LOOFIO_CHANNEL_CAPABILITY_AND_EVENT_MATRIX_V1.md)
 
-## 아직 확정하지 않은 것
+### 구현 계약
 
-다음은 현재 기획 자료에서 확정되지 않았으므로 이 문서 묶음에서도 특정 제품으로 고정하지 않는다.
+- [`LOOFIO_DATA_SCHEMA_DECISION_INTELLIGENCE_V1.md`](LOOFIO_DATA_SCHEMA_DECISION_INTELLIGENCE_V1.md)
+- [`LOOFIO_API_CONTRACT_DECISION_INTELLIGENCE_V1.md`](LOOFIO_API_CONTRACT_DECISION_INTELLIGENCE_V1.md)
 
-- 클라우드/호스팅 공급자
-- 모니터링 제품
-- Secret Manager 제품
-- Production 배포·migration 실행 제품
-- 실제 GitHub 사용자/팀 CODEOWNERS
+## 4. Governance
 
-이 항목은 구현 단계에서 ADR 또는 별도 기술결정 문서로 확정한다.
+| 문서 | 역할 |
+|---|---|
+| [`AGENTS.md`](AGENTS.md) | 저장소 최상위 개발 규칙 |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | 현재·목표 시스템 경계 |
+| [`DEPENDENCY_RULES.md`](DEPENDENCY_RULES.md) | 허용·금지 의존성 |
+| [`PROHIBITED_CHANGES.md`](PROHIBITED_CHANGES.md) | 코드가 동작해도 허용하지 않는 변경 |
+| [`CODE_OWNERSHIP.md`](CODE_OWNERSHIP.md) | Logical ownership·필수 검토 |
+| [`DEPLOYMENT_FLOW.md`](DEPLOYMENT_FLOW.md) | 현재 CI와 목표 배포·Release Gate |
+
+## 5. 제품·장기 방향
+
+- [`AI_마케팅_매니저_데이터_수집_및_기획_전략_v1.1.md`](AI_마케팅_매니저_데이터_수집_및_기획_전략_v1.1.md)
+- [`LOOFIO_TECH_ROADMAP_v1.md`](LOOFIO_TECH_ROADMAP_v1.md)
+- [`LOOFIO_BUSINESS_TAXONOMY_V1.md`](LOOFIO_BUSINESS_TAXONOMY_V1.md)
+
+## 6. 우선순위
+
+문서 충돌 시 판단 목적을 먼저 구분한다.
+
+```text
+보안·금지 규칙
+→ AGENTS / PROHIBITED_CHANGES
+
+현재 구현
+→ migration / code / tests / CURRENT_IMPLEMENTATION_STATUS
+
+현재 API
+→ FastAPI / Pydantic / tests / API_CONTRACT
+
+현재 DB
+→ api/migrations / LOOFIO_DATA_SCHEMA_V1
+
+다음 구현
+→ Planning Index / Decision Register / Roadmap / Backlog / 상세 설계
+```
+
+## 7. 현재 확정하지 않은 것
+
+- AI provider/model
+- Production hosting·managed DB
+- Queue·Cache
+- Monitoring·Secret Manager
+- 첫 Approved Connector
+- Playbook `ACTIVE` 정량 승격 기준
+- Grade A/B 정식 통계 Method
+- 직접 고객 접촉 데이터 보존 기간
+
+미결정 항목은 [`DECISION_REGISTER_V2.md`](DECISION_REGISTER_V2.md)의 `OPEN` 상태를 따른다.
