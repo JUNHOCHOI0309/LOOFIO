@@ -1,290 +1,475 @@
-# LOOFIO Dependency Rules v1
+# LOOFIO Dependency Rules v2
+
+- 기준일: 2026-08-18
+- 기준 커밋: `0c75e524af5e9baa896e5685103ce8afe858b5a0`
+- 상태: 현재 모듈 경계 + Decision Intelligence 추가 규칙
 
 ## 1. 목적
 
-모듈 간 의존성을 한 방향으로 유지하여 LOOFIO가 특정 데이터 공급자, AI 모델, 외부 채널 또는 UI에 강결합되지 않도록 한다.
+LOOFIO가 특정 AI 모델·광고 채널·데이터 공급자에 강결합되지 않으면서, 각 의사결정 단계가 자기 책임만 수행하도록 의존 방향을 정의한다.
 
 ---
 
 # 2. 기본 방향
 
 ```text
-Apps/UI
+Apps / UI
   ↓
 API
   ↓
 Application
   ↓
-Domain / Analytics
+Domain / Analytics / Decision Intelligence
   ↓
-Ports
+Ports / Contracts
 
-Infrastructure/Connectors
+Infrastructure / AI / Connectors
   → Ports 구현
 ```
 
-**안쪽 계층은 바깥쪽 구현을 알면 안 된다.**
-
-## 2.1 현재 저장소 매핑
-
-| 논리 계층 | 현재 경로 |
-|---|---|
-| Apps/UI | `apps/web/app` |
-| API | `api/app/api/routes`, `api/app/schemas` |
-| Application/Domain workflow | `api/app/imports`, `opportunities`, `recommendations`, `actions`, `results` |
-| Metrics | `api/app/metrics` |
-| Detectors | `api/app/analytics/detectors` |
-| Scoring | `api/app/analytics/scoring` |
-| Infrastructure store | 각 application module의 `store.py` |
-| Database migration | `api/migrations` |
-
-현재 작은 MVP에서는 application contract와 PostgreSQL adapter가 같은 feature package에 있지만, Detector와 Scoring은 DB·HTTP·AI 없이 테스트 가능한 pure module로 유지한다.
+안쪽 계층은 provider SDK와 HTTP controller를 알지 않는다.
 
 ---
 
-# 3. 허용 관계
-
-| From | To | 허용 |
-|---|---|---|
-| Apps/UI | API Client Contract | ✅ |
-| API | Application Use Case | ✅ |
-| Application | Domain | ✅ |
-| Application | Analytics Interface | ✅ |
-| Application | Repository/AI/Connector Port | ✅ |
-| Normalization | Domain Contract | ✅ |
-| Domain Adapter | BusinessEvent Contract | ✅ |
-| Metrics | Domain/BusinessEvent read model | ✅ |
-| Detector | Metric output | ✅ |
-| Scoring | Opportunity candidate | ✅ |
-| Recommendation | Opportunity/Evidence | ✅ |
-| Measurement | Action/Result/Metric | ✅ |
-| Infrastructure | Port Interface | ✅ |
-| Connector | External provider SDK/API | ✅ |
-| AI Adapter | AI provider SDK/API | ✅ |
-
----
-
-# 4. 금지 관계
-
-| From | To | 이유 |
-|---|---|---|
-| Detector | AI Provider | Detector는 deterministic이어야 함 |
-| Metric | LLM | 계산 재현성 훼손 |
-| Domain | Connector SDK | 외부 공급자 강결합 |
-| Domain | HTTP Controller | 계층 역전 |
-| Domain | ORM-specific API 직접 의존 | 도메인 오염 방지 |
-| Opportunity | Content Generator | 기회 탐지와 실행 콘텐츠 분리 |
-| Connector | Detector 직접 호출 | 수집과 분석 lifecycle 분리 |
-| AI Recommendation | Raw Import Row 직접 조회 | 정규화/근거 경계 우회 |
-| UI | DB | API 계약 우회 |
-| Measurement | AI의 설명 문장 | 실제 수치 대신 자연어에 의존 금지 |
-| Tenant A module context | Tenant B data | 보안 불변조건 |
-
----
-
-# 5. Data Dependency
-
-정상 흐름:
+# 3. 정상 데이터 의존 흐름
 
 ```text
 Raw Import
 → Normalized Domain
-→ BusinessEvent
 → Metric
 → Detector
 → Opportunity
-→ Recommendation
+→ Cause Candidate
+→ Strategy Candidate
+→ Playbook Resolution
+→ Economics / Feasibility
+→ Experiment
+→ Recommendation Package
+→ Quality Result
+→ User Decision
 → Action
 → Result
 → Measurement
 ```
 
-다음 shortcut을 만들지 않는다.
+허용되는 backward feedback:
 
 ```text
-Raw Import ───────────────→ AI Recommendation   ❌
-Raw Import ───────────────→ Detector            ❌
-Recommendation ───────────→ Metric              ❌
-AI text ──────────────────→ Revenue calculation ❌
+Decision / Result / Measurement
+→ 다음 분석의 historical context
 ```
+
+과거 결과는 새 Opportunity의 사실을 직접 덮어쓰지 않고 versioned context로 사용한다.
 
 ---
 
-# 6. Opportunity Engine Dependency
+# 4. 허용 관계
+
+| From | To | 허용 |
+|---|---|---|
+| Apps/UI | API contract | ✅ |
+| API route | Application use case | ✅ |
+| Application | Domain / Port | ✅ |
+| Normalizer | Domain contract | ✅ |
+| Metrics | normalized Domain | ✅ |
+| Detector | metric DTO | ✅ |
+| Opportunity | detector/scoring output | ✅ |
+| Cause Analysis | Opportunity/Evidence/aggregate context | ✅ |
+| Strategy Engine | Cause/constraints/economics port | ✅ |
+| Playbook Resolver | Strategy + registry + policy | ✅ |
+| Economics | explicit cost/value inputs | ✅ |
+| Experiment Designer | Playbook + deterministic metric catalog | ✅ |
+| Recommendation Package Assembler | Cause/Strategy/Playbook/Experiment outputs | ✅ |
+| Quality Validator | Recommendation Package | ✅ |
+| Action | approved Recommendation Package or legacy approved Recommendation | ✅ |
+| Channel Execution | approved Action + Connector Port | ✅ |
+| Measurement | Action/Result/baseline/context | ✅ |
+| AI Adapter | AI Port + provider SDK | ✅ |
+| Connector | Connector Port + provider SDK | ✅ |
+| Infrastructure | Repository/Secret/Queue Port | ✅ |
+
+---
+
+# 5. 금지 관계
+
+| From | To | 금지 이유 |
+|---|---|---|
+| Metric / Detector | LLM or HTTP | 계산 재현성 훼손 |
+| Opportunity | Content Generator | 탐지와 실행 혼합 |
+| Cause Analysis | Raw Import 전체 | 정규화·Evidence 경계 우회 |
+| Cause Analysis | Cause fact assertion | 가설을 사실로 오염 |
+| Strategy Engine | AI Provider SDK | ranking 재현성·교체성 훼손 |
+| Strategy Engine | Channel execution implementation | 선택과 실행 결합 |
+| Playbook Definition | tenant-specific customer/data | registry 오염 |
+| Playbook | unversioned free text only | 재현·평가 불가 |
+| Economics | AI-generated numeric values | 비용·가치 신뢰성 훼손 |
+| Experiment | AI text as metric source | 성공 판정 재현성 훼손 |
+| Recommendation Package Assembler | Raw rows / DB arbitrary query | 이전 단계 우회 |
+| Recommendation Package Assembler | Opportunity numeric recalculation | Source of Truth 중복 |
+| Quality Validator | provider-specific output semantics | 공급자 강결합 |
+| Channel Connector | Opportunity 판단 | 수집/실행과 의사결정 혼합 |
+| Channel Execution | approval bypass | 제품 안전 위반 |
+| Measurement | Recommendation Estimate as Actual | 실제·추정 혼합 |
+| UI | Database | API/authorization 우회 |
+| Tenant A context | Tenant B data | 격리 위반 |
+
+---
+
+# 6. Opportunity Engine
 
 ```text
 metrics
-  ↓
-detectors
-  ↓
-scoring
-  ↓
-opportunity persistence
+→ detectors
+→ scoring
+→ opportunity persistence
 ```
-
-`detectors`는 다음에 의존할 수 있다.
-
-- metric DTO
-- detector config
-- time/date utilities
-- pure domain types
-
-`detectors`가 의존하면 안 되는 것:
-
-- OpenAI/Anthropic/기타 AI SDK
-- HTTP request
-- 외부 광고 API
-- UI
-- prompt template
-- connector implementation
-
----
-
-# 7. AI Dependency
-
-```text
-Application
-→ AI Port
-← AI Adapter
-   → Provider SDK
-```
-
-비즈니스 로직은 다음과 같이 호출한다.
-
-```text
-generateRecommendation(input)
-```
-
-다음처럼 호출하지 않는다.
-
-```text
-openai.chat.completions(...)
-```
-
-를 Detector/Application 핵심 코드 곳곳에 직접 작성하는 방식.
-
-모델명과 provider 선택은 AI Gateway/Adapter 내부 책임이다.
-
----
-
-# 8. Connector Dependency
-
-Connector 책임:
-
-```text
-External API
-↕
-Provider DTO
-↕
-Normalization / Port Contract
-```
-
-Connector가 다음을 결정하면 안 된다.
-
-- Opportunity인지 여부
-- Recommendation 내용
-- Incremental Revenue
-- 사용자 승인 정책
-
-Connector는 데이터를 수집하거나 승인된 Action을 실행하는 어댑터다.
-
----
-
-# 9. Domain Adapter Dependency
-
-다업종 지원은 다음 패턴으로 추가한다.
-
-```text
-Provider Data
-→ Domain Adapter
-→ Domain Entity
-→ BusinessEvent
-→ Common Analytics
-```
-
-예:
-
-```text
-Appointment Adapter
-Sale Adapter
-WorkOrder Adapter
-Booking Adapter
-```
-
-새 Domain Adapter가 기존 Detector를 복제해서 별도 구현하는 것을 기본값으로 삼지 않는다.
-
-먼저 공통 Metric/Detector 재사용 가능성을 검토한다.
-
----
-
-# 10. Shared/Common Module 제한
-
-`common`, `utils`, `shared`는 아무 코드나 넣는 쓰레기통이 아니다.
 
 허용:
 
-- 순수 날짜/시간 유틸
-- money/value object
-- pagination type
-- error base type
-- ID type
-- generic validation primitives
+- pure domain type
+- metric DTO
+- detector config
+- time/money utility
 
 금지:
 
-- Business-specific rule
-- Opportunity rule
-- AI prompt
-- Connector rule
-- DB repository implementation
-
-공통 모듈이 도메인 모듈을 import하면 안 된다.
+- AI SDK
+- prompt
+- content
+- channel connector
+- external ad API
+- user messaging
+- Playbook selection
 
 ---
 
-# 11. Circular Dependency 금지
+# 7. Cause Analysis
 
-순환 의존:
+입력:
 
 ```text
-business → marketing → business
+Opportunity
+Evidence
+Limitations
+Metric Summary
+Business / Offering / Operational aggregate
+External Context(optional)
 ```
 
-발생 시 다음 중 하나로 해소한다.
+Cause module은 다음 Port를 통해 aggregate context를 받는다.
 
-1. 공통 Port/Contract 추출
-2. Application orchestration으로 이동
-3. 이벤트 기반 연결
-4. 진짜 동일 도메인이라면 모듈 경계 재검토
+```text
+BusinessContextReader
+OperationalConstraintReader
+HistoricalActionSummaryReader
+ExternalContextReader
+```
 
-순환 의존을 dependency injection trick으로 숨기지 않는다.
+Raw import repository를 직접 호출하지 않는다.
+
+Cause wording에 AI를 사용하더라도 candidate seed·evidence refs·missing data·score는 구조화된 결과가 우선이다.
 
 ---
 
-# 12. 테스트 경계
+# 8. Strategy Engine
 
-각 모듈은 바깥 구현 없이 테스트 가능해야 한다.
+```text
+Cause Candidate
++ Business Constraints
++ Economics Inputs
++ Available Channels
++ Policy
+→ Strategy Candidates
+```
+
+Strategy ranking은 provider-neutral deterministic rule/score로 시작한다.
+
+AI는 selection reason 문장만 보조할 수 있다.
+
+Strategy module이 직접 광고 캠페인·고객 메시지·Playbook step을 생성하지 않는다.
+
+---
+
+# 9. Action Playbook
+
+Playbook Definition은 versioned registry다.
+
+허용:
+
+- archetype
+- opportunity/cause/strategy code
+- required data
+- precondition/contraindication
+- step template
+- economics template
+- experiment template
+- policy tags
+
+금지:
+
+- 특정 tenant ID
+- 특정 고객 ID
+- 특정 병원명
+- runtime 예산
+- 실제 대상 cohort
+- 외부 provider credential
+
+Runtime 값은 `PlaybookInstance` 또는 Recommendation Package에 저장한다.
+
+---
+
+# 10. Economics / Feasibility
+
+Economics module은 explicit value object를 사용한다.
+
+```text
+Money
+CostComponent
+ContributionAssumption
+CapacityConstraint
+BudgetCap
+```
+
+`unknown`과 `0`은 다른 값이다.
+
+LLM이나 자연어 설명에서 비용을 parse해 Source of Truth로 사용하지 않는다.
+
+---
+
+# 11. Experiment Design
+
+Experiment Designer는 Metric Catalog와 비교 방식 Contract에 의존한다.
+
+금지:
+
+- prompt 문장으로 primary metric 결정
+- 결과가 나온 뒤 success threshold 변경
+- Evidence Grade를 UI에서만 임의 변경
+- Action result를 직접 수정
+
+Experiment은 실행 전에 versioned definition으로 고정한다.
+
+---
+
+# 12. Recommendation Package Assembler
+
+Recommendation Package Assembler는 조립 계층이다.
+
+```text
+Opportunity
+Cause Analysis
+Strategy Comparison
+Playbook Instance
+Economics
+Experiment
+Channel Plan
+→ Recommendation Package
+```
+
+Recommendation Package Assembler가 다음을 수행하면 안 된다.
+
+- Detector 재실행
+- raw data query
+- cost invent
+- success metric 변경
+- Playbook contraindication 우회
+- approval 생성
+
+---
+
+# 13. Recommendation Quality
+
+Quality Validator는 deterministic rule을 우선한다.
+
+입력:
+
+```text
+Recommendation Package
++ Source References
++ Policy Result
+```
+
+출력:
+
+```text
+score
+section breakdown
+hard failures
+status
+validator version
+```
+
+Quality Validator는 AI의 자기평가 점수를 사용하지 않는다.
+
+---
+
+# 14. AI Dependency
+
+```text
+Application / Recommendation Package Assembler
+→ AI Port
+← AI Adapter
+  → Provider SDK
+```
+
+AI Gateway task 예:
+
+```text
+cause_hypothesis_wording
+alternative_comparison_explanation
+action_plan_explanation
+content_draft
+```
+
+금지:
+
+```text
+detector_calculation
+economics_calculation
+experiment_result
+quality_score
+```
+
+---
+
+# 15. Channel Execution / Connector
+
+```text
+Approved Action
+→ Execution Port
+← Online / Offline Connector
+```
+
+Connector 책임:
+
+- provider DTO
+- API call
+- rate limit
+- retry
+- external reference
+- delivery/result event
+
+Connector가 결정하지 않는 것:
+
+- Opportunity
+- Cause
+- Strategy
+- target rationale
+- budget policy
+- Measurement interpretation
+
+오프라인 실행도 Connector와 유사한 tracking contract를 사용한다.
+
+---
+
+# 16. Measurement
+
+```text
+Action
++ Result
++ Baseline
++ External Context
++ Cost
+→ Measurement
+```
+
+Measurement는 AI 설명을 Source of Truth로 사용하지 않는다.
+
+Grade C/D를 causal effect로 승격하지 않는다.
+
+---
+
+# 17. Shared/Common 제한
+
+허용:
+
+- time/date
+- money
+- ID
+- pagination
+- generic errors
+- validation primitives
+- version type
+
+금지:
+
+- Cause rule
+- Strategy rule
+- Playbook
+- economics formula
+- experiment method
+- AI prompt
+- Connector rule
+- repository implementation
+
+---
+
+# 18. Circular Dependency
 
 예:
 
 ```text
-LowDemandSlotDetector
+strategy → playbook → strategy
 ```
 
-는 DB, HTTP, AI 없이 pure input으로 테스트 가능해야 한다.
+발생 시:
 
-외부 구현은 contract/integration test에서 검증한다.
+1. immutable contract 추출
+2. application orchestration으로 이동
+3. registry port 분리
+4. module boundary 재검토
+
+DI container로 숨기지 않는다.
 
 ---
 
-# 13. 변경 규칙
+# 19. 테스트 경계
+
+다음은 DB·HTTP·AI 없이 pure test가 가능해야 한다.
+
+- Detector
+- Opportunity Score
+- Cause candidate seeding/scoring
+- Cause→Strategy mapping
+- Strategy Score
+- Playbook applicability
+- Economics calculation
+- Experiment validation
+- Recommendation Quality Score
+
+Repository/AI/Connector는 integration/contract test에서 검증한다.
+
+---
+
+# 20. 현재 코드와 목표 모듈
+
+현재:
+
+```text
+api/app/analytics
+api/app/opportunities
+api/app/recommendations
+api/app/actions
+api/app/results
+```
+
+목표는 additive 확장이다.
+
+기존 module을 즉시 삭제·이동하거나 기존 endpoint를 깨지 않는다.
+
+---
+
+# 21. 변경 규칙
 
 새 dependency 추가 전 확인:
 
-- 이 라이브러리가 어느 계층에 속하는가?
-- Domain/Analytics를 외부 vendor에 묶는가?
-- 순수 인터페이스 뒤로 숨길 수 있는가?
-- Security/PII 영향이 있는가?
-- 장기적으로 교체 가능한가?
+- 어느 계층인가
+- deterministic stage를 vendor에 묶는가
+- tenant/PII 영향
+- versioning 필요
+- test isolation 가능
+- fallback 가능
+- rollback/disable 가능
+- 기존 `/api/v1` 호환성
 
-새 외부 SaaS/SDK는 승인 없는 Core 의존성으로 추가하지 않는다.
+새 외부 SDK는 Core/Analytics/Decision Logic에 직접 추가하지 않는다.

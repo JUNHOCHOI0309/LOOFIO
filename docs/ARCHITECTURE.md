@@ -1,10 +1,31 @@
-# LOOFIO Architecture v1
+# LOOFIO Architecture v2
+
+- 기준일: 2026-08-18
+- 기준 브랜치: `main`
+- 문서 정렬 기준 커밋: `0c75e524af5e9baa896e5685103ce8afe858b5a0`
+- 상태: 현재 구현 + Decision Intelligence 목표 아키텍처
 
 ## 1. 목적
 
 이 문서는 LOOFIO의 시스템 경계와 데이터 흐름을 정의한다.
 
-핵심 제품 흐름:
+현재 구현 루프:
+
+```text
+Hospital Appointment CSV
+→ Normalization
+→ Metrics
+→ 4 Detectors
+→ Opportunity + Evidence + Score
+→ Deterministic Recommendation Draft
+→ Decision
+→ Manual Action
+→ Result
+→ Measurement
+→ Dashboard
+```
+
+목표 의사결정 루프:
 
 ```text
 Business Data
@@ -15,11 +36,21 @@ Deterministic Analytics
         ↓
 Opportunity Detection
         ↓
-AI Explanation / Recommendation
+Cause Analysis
+        ↓
+Strategy Comparison
+        ↓
+Action Playbook Resolution
+        ↓
+Economics / Feasibility
+        ↓
+Experiment Design
+        ↓
+Recommendation Package
         ↓
 User Decision
         ↓
-Action
+Channel Execution
         ↓
 Result
         ↓
@@ -30,444 +61,641 @@ Next Analysis
 
 핵심 원칙:
 
-> AI가 원본 데이터에서 기회를 임의 생성하지 않는다. 데이터 계층과 deterministic engine이 먼저 구조화된 사실과 후보 기회를 만든다.
-
-## 1.1 현재 구현 snapshot
-
-2026-08-17 현재 Hospital Appointment MVP는 다음 경로를 실제로 구현한다.
-
-```text
-Next.js Dashboard/Data UI
-→ FastAPI /api/v1
-→ PostgreSQL tenant-scoped store
-→ CSV normalization
-→ Appointment Metrics
-→ 4 Detectors
-→ versioned Opportunity Score
-→ deterministic manual Recommendation
-→ Manual Action
-→ Result + baseline Measurement
-```
-
-`AI Explanation / Recommendation` 중 실제 LLM Gateway와 provider adapter는 아직 구현하지 않았다. 현재 Recommendation은 계산 결과를 바꾸지 않는 버전 고정 수동 검토 template이다. 실제 경로와 미구현 경계는 `CURRENT_IMPLEMENTATION_STATUS.md`를 따른다.
+> AI가 원본 데이터에서 기회·원인·경제성·효과를 임의로 생성하지 않는다. 각 계층이 구조화된 계약을 만들고 AI는 설명과 표현을 보조한다.
 
 ---
 
-# 2. Logical Architecture
+# 2. 현재와 목표를 구분한다
+
+## 현재 Source of Truth
 
 ```text
-┌──────────────────────────────────────────────┐
-│                   Apps / UI                  │
-│ Dashboard · Opportunity · Action · Results  │
-└──────────────────────┬───────────────────────┘
-                       ↓
-┌──────────────────────────────────────────────┐
-│                  API Layer                   │
-│ Auth · Validation · DTO · Idempotency        │
-└──────────────────────┬───────────────────────┘
-                       ↓
-┌──────────────────────────────────────────────┐
-│              Application Layer               │
-│ Use Cases · Transaction Boundary · Policies  │
-└──────┬─────────┬──────────┬──────────┬────────┘
-       ↓         ↓          ↓          ↓
-   Business   Ingestion  Opportunity  Action/Measurement
-       │         │          │          │
-       └─────────┴──────┬───┴──────────┘
-                        ↓
-┌──────────────────────────────────────────────┐
-│                Domain / Data                 │
-│ Business · Offering · Customer · Domain Data│
-│ BusinessEvent · Metrics · Opportunity        │
-└──────────────────────┬───────────────────────┘
-                       ↓
-┌──────────────────────────────────────────────┐
-│                 Ports                        │
-│ Repository · AI · External Data · Channels  │
-└──────────────────────┬───────────────────────┘
-                       ↑ implements
-┌──────────────────────────────────────────────┐
-│             Infrastructure / Adapters        │
-│ PostgreSQL · CSV · Weather · Public API      │
-│ Marketing Channel Connectors · AI Providers │
-└──────────────────────────────────────────────┘
+api/migrations/*.sql
+api/app/*
+api/tests/*
+docs/CURRENT_IMPLEMENTATION_STATUS.md
+docs/API_CONTRACT.md
+```
+
+## 목표 설계
+
+```text
+LOOFIO_DECISION_INPUT_CONTRACT_V1.md
+LOOFIO_CAUSE_ANALYSIS_ENGINE_V1.md
+LOOFIO_STRATEGY_ENGINE_V1.md
+LOOFIO_ACTION_PLAYBOOK_V1.md
+LOOFIO_EXPERIMENT_DESIGN_V1.md
+LOOFIO_RECOMMENDATION_PACKAGE_V2.md
+LOOFIO_RECOMMENDATION_QUALITY_BAR_V1.md
+LOOFIO_CHANNEL_EXECUTION_V1.md
+LOOFIO_MEASUREMENT_FRAMEWORK_V1.md
+LOOFIO_DATA_SCHEMA_DECISION_INTELLIGENCE_V1.md
+LOOFIO_API_CONTRACT_DECISION_INTELLIGENCE_V1.md
+```
+
+목표 문서의 entity·endpoint·module은 migration·code·test가 생기기 전에는 구현된 것으로 취급하지 않는다.
+
+---
+
+# 3. Logical Architecture
+
+```text
+┌────────────────────────────────────────────────────────┐
+│ Apps / UI                                              │
+│ Dashboard · Opportunity · Diagnosis · Plan · Results   │
+└──────────────────────────┬─────────────────────────────┘
+                           ↓
+┌────────────────────────────────────────────────────────┐
+│ API Layer                                              │
+│ Auth · Validation · DTO · Idempotency · Version        │
+└──────────────────────────┬─────────────────────────────┘
+                           ↓
+┌────────────────────────────────────────────────────────┐
+│ Application Layer                                      │
+│ Use Cases · Transaction · Policy · Orchestration       │
+└───────┬────────────┬──────────────┬────────────────────┘
+        ↓            ↓              ↓
+  Ingestion      Analytics     Decision Intelligence
+                                   │
+                ┌──────────────────┼─────────────────────┐
+                ↓                  ↓                     ↓
+              Cause            Strategy            Playbook/Experiment
+                └──────────────────┬─────────────────────┘
+                                   ↓
+                        Recommendation Package
+                                   ↓
+                         Decision / Action / Result
+                                   ↓
+                              Measurement
+```
+
+Port/Adapter 방향:
+
+```text
+Domain / Analytics / Decision Intelligence
+        ↓ depends on
+Ports / Contracts
+
+Infrastructure / AI Providers / External Connectors
+        → implement Ports
 ```
 
 ---
 
-# 3. Runtime Data Flow
+# 4. Runtime Data Flow
 
-## 3.1 Import
+## 4.1 Import
 
 ```text
-CSV / Excel / API
-→ Raw Import
+CSV / API
+→ Raw Inspection
 → Validation
-→ Column Mapping
-→ Domain Normalizer
-→ Domain Tables
-→ BusinessEvent Projection
+→ Column / Status Mapping
+→ Domain Normalization
+→ Appointment / Offering / Customer
 ```
 
-원본과 정규화 데이터는 분리한다.
+현재 Hospital MVP의 raw·normalized lineage와 import idempotency를 유지한다.
 
-## 3.2 Analytics
+## 4.2 Analytics
 
 ```text
-Domain + BusinessEvent
+Normalized Domain
 → Metric Engine
-→ Metric Values
 → Detector
-→ Opportunity Score / Confidence
-→ Opportunity + Evidence
+→ Opportunity
+→ Evidence
+→ Opportunity Score
 ```
 
-Metric과 Detector는 LLM 없이 재현 가능해야 한다.
+현재 Detector:
 
-## 3.3 Recommendation
+```text
+LOW_DEMAND_SLOT
+CANCELLATION_HOTSPOT
+DORMANT_CUSTOMER
+SERVICE_DEMAND_GAP
+```
+
+RevenueGap은 LowDemandSlot Opportunity의 Estimate 계층에 포함된다.
+
+Metric·Detector·Score는 LLM 없이 재현 가능해야 한다.
+
+## 4.3 Cause Analysis
 
 ```text
 Opportunity
 + Evidence
 + Limitations
-+ Business Context
-+ Allowed Actions
-→ AI Manager
-→ Structured Recommendation
++ Metric Summary
++ Business / Offering / Operation Context
++ External Context(optional)
+→ Cause Candidates
+→ Diagnostic Questions
 ```
 
-AI는 Observation의 숫자를 새로 만들지 않는다.
-
-## 3.4 Action
+출력은 가설이다.
 
 ```text
-Recommendation
-→ User Decision
-→ Action Draft
-→ User Approval
-→ Manual or Connector Execution
+cause_code
+hypothesis
+supporting_evidence_refs
+contradicting_evidence_refs
+missing_data
+testability
+score
+limitations
 ```
 
-MVP에서는 Human-in-the-loop가 기본이다.
+Cause Analysis가 Raw Import 전체를 직접 읽지 않는다.
 
-## 3.5 Measurement
+## 4.4 Strategy Selection
+
+```text
+Opportunity
++ Cause Candidates
++ Business Goal
++ Economics
++ Capacity / Staff
++ Available Channels
++ Policy
+→ Strategy Candidates
+→ Ranked Alternatives
+```
+
+최소 2개 후보를 비교하거나 단일 후보 사유를 남긴다.
+
+유효 Strategy Family:
+
+```text
+ACQUISITION
+CONVERSION
+RETENTION_REACTIVATION
+CANCELLATION_RECOVERY
+OFFER_PACKAGING
+CAPACITY_OPERATION
+DISCOVERABILITY
+PARTNERSHIP_REFERRAL
+DATA_COLLECTION
+NO_ACTION
+```
+
+## 4.5 Playbook Resolution
+
+```text
+Selected Strategy
++ Opportunity / Cause
++ Archetype
++ Data Readiness
++ Policy
+→ Applicable Versioned Playbooks
+```
+
+Playbook은 tenant별 자유 문장이 아니라 versioned definition이다.
+사업장별 값은 별도 plan instance에 주입한다.
+
+## 4.6 Economics / Feasibility
+
+```text
+Offering price
+Variable cost
+Benefit cost
+Media / Partner cost
+Staff time
+Capacity
+Policy
+→ Economics / Feasibility Result
+```
+
+비용 미상은 `unknown`으로 유지한다.
+
+## 4.7 Experiment Design
+
+```text
+Playbook
++ Population
++ Treatment
++ Comparison
++ Time
++ Primary Metric
++ Guardrail
++ Success / Stop
++ Attribution Window
+→ Experiment Contract
+```
+
+핵심 metric은 AI 문장에서 가져오지 않는다.
+
+## 4.8 Recommendation Package Assembly
+
+```text
+Opportunity
++ Cause Analysis
++ Strategy Comparison
++ Selected Playbook
++ Economics
++ Experiment
++ Channel Plan
+→ Final Action Plan Package
+→ Quality Validation
+```
+
+Recommendation Package Assembler는 수치를 재계산하지 않는다.
+
+## 4.9 User Decision / Action
+
+```text
+Recommendation Package
+→ approved / rejected / modified / later
+→ Action Draft
+→ Approval
+→ Manual / Assisted / Connector Execution
+```
+
+현재 Hospital MVP는 manual execution만 구현되어 있다.
+
+## 4.10 Measurement
 
 ```text
 Action
-→ Result Collection
+→ Actual Result
 → Baseline
-→ Measurement
-→ Incremental Estimate
-→ Next Decision Context
+→ External Context Review
+→ Observed Delta
+→ Incremental Estimate(optional)
+→ Economics
+→ Evidence Grade
 ```
+
+현재 구현은 직전 동일 길이 baseline과의 관찰 비교다.
 
 ---
 
-# 4. Module Boundaries
+# 5. Physical Module Mapping
 
-권장 논리 모듈:
+## 현재 구현 위치
+
+| 책임 | 현재 위치 |
+|---|---|
+| Web | `apps/web/app` |
+| API routes | `api/app/api/routes` |
+| Auth/session | `api/app/auth` |
+| Import/normalization | `api/app/imports` |
+| Metrics | `api/app/metrics` |
+| Detectors | `api/app/analytics/detectors` |
+| Scoring | `api/app/analytics/scoring` |
+| Opportunity | `api/app/opportunities` |
+| Recommendation | `api/app/recommendations` |
+| Action | `api/app/actions` |
+| Result/Measurement | `api/app/results` |
+| Schema | `api/app/schemas` |
+| Migration | `api/migrations` |
+| Tests | `api/tests` |
+
+## 목표 additive module 후보
+
+구현 시 실제 package 명은 코드 구조 검토 후 확정한다.
 
 ```text
-/apps
-/api
-
-/modules
-  /business
-  /taxonomy
-  /ingestion
-  /sales
-  /marketing
-  /external-data
-
-/analytics
-  /metrics
-  /detectors
-  /scoring
-
-/ai
-  /gateway
-  /explanation
-  /recommendation
-  /content
-
-/measurement
-
-/connectors
-  /public-data
-  /weather
-  /reservation
-  /analytics
-  /advertising
-  /messaging
-
-/data
-  /repositories
-  /migrations
-
-/jobs
-/monitoring
+api/app/decisioning/causes
+api/app/decisioning/strategies
+api/app/decisioning/playbooks
+api/app/experiments
+api/app/recommendation_packages
+api/app/recommendation_quality
+api/app/channel_execution
+api/app/ai/gateway
 ```
 
-실제 언어/프레임워크 구조는 달라질 수 있으나 **경계의 의미는 유지**한다.
+기존 `recommendations`, `actions`, `results`를 즉시 이동·삭제하지 않는다.
 
 ---
 
-# 5. Core Domain
+# 6. Core Domain
 
 ## Tenant
 
-보안 및 데이터 격리 경계.
+보안·데이터 격리 경계.
 
-## Business
+## Business / Location
 
-분석의 최상위 사업장 단위.
+분석·실행의 사업장 범위.
 
 ## Offering
 
-상품/서비스/패키지/회원권 등 판매 대상.
+진료·시술·검사·상품·서비스 등 분석과 실행의 대상.
 
 ## Customer
 
-사업장 내부에서 가명 식별되는 고객.
+사업장 범위의 가명 고객.
 
-## Domain Object
+## Appointment
 
-사업 유형별 운영 객체.
-
-예:
-
-```text
-Appointment
-Sale
-Membership
-Contract
-WorkOrder
-Booking
-Project
-```
-
-## BusinessEvent
-
-다업종 데이터를 공통 Analytics 계층으로 전달하는 Fact Stream.
+Hospital `APPOINTMENT_SERVICE` Domain Object.
 
 ## Opportunity
 
-Detector가 생성한 매출 기회 후보.
+Detector가 생성한 현상·Evidence·Estimate·Score.
 
-## Recommendation
+## CauseCandidate
 
-Opportunity를 실행 가능한 행동으로 바꾼 제안.
+원인 가설과 근거·반증·부족 데이터.
 
-## Action
+## StrategyCandidate
 
-실제로 실행된 또는 실행 예정인 행동.
+개입 방향, 점수, 비용·위험·선택/제외 이유.
 
-## Measurement
+## PlaybookDefinition
 
-실행 전후 결과를 비교한 측정 객체.
+적용·금지조건, 실행 절차, 비용·실험 template를 가진 versioned definition.
 
----
+## Experiment
 
-# 6. Archetype Architecture
+대상·처리·비교·기간·metric·성공·중단조건.
 
-공식 직업분류는 최종 실행 로직이 아니다.
+## RecommendationPackage
 
-```text
-KECO / KSCO
-→ Archetype Candidate
-→ Revenue Model Confirmation
-→ Final Business Archetype
-→ Data Readiness
-→ Metric Adapter
-→ Detector Set
-```
+최종 Action Plan Package.
 
-새 업종 지원 시 가능한 한 기존 Archetype을 재사용한다.
+## Action / Result / Measurement
 
-새 Archetype 추가는 새로운 테이블을 만드는 것보다 먼저 다음을 검토한다.
-
-1. 기존 Domain Object로 표현 가능한가?
-2. BusinessEvent로 표준화 가능한가?
-3. 기존 Metric Adapter를 재사용 가능한가?
-4. 기존 Detector를 재사용 가능한가?
+승인된 실행, 실제 결과, baseline 기반 해석.
 
 ---
 
-# 7. AI Boundary
+# 7. Stage Ownership and Boundary
 
-AI는 시스템의 판단 전체가 아니다.
+| Stage | Source of Truth | 하지 않는 일 |
+|---|---|---|
+| Opportunity | Metric/Detector | 원인·해결책 선택 |
+| Cause | Evidence references | 원인 확정 |
+| Strategy | constraints/economics | 콘텐츠 생성 |
+| Playbook | registry definition | tenant 값 하드코딩 |
+| Experiment | deterministic contract | 효과 보장 |
+| Recommendation Package Assembler | prior stage outputs | raw 분석·수치 계산 |
+| Channel | approved plan | Opportunity 판단 |
+| Measurement | actual result + baseline | AI 설명을 사실로 사용 |
+
+---
+
+# 8. AI Boundary
 
 ```text
-Raw Data
-  X
-  └─> LLM 직접 분석 금지
-
-Raw Data
-→ Deterministic Processing
-→ Structured Opportunity
-→ LLM
-```
-
-AI Gateway 뒤에 provider를 숨긴다.
-
-```text
-task_type
-quality_tier
-structured_schema
-budget
+Structured Domain / Decision Data
+→ Context Builder
+→ PII / Policy Filter
 → AI Gateway
-→ provider/model
+→ Provider Adapter
+→ Structured Output
+→ Validators
 ```
 
-특정 모델은 교체 가능해야 한다.
-
----
-
-# 8. Database Boundary
-
-PostgreSQL 기준.
-
-계층:
+Validator:
 
 ```text
-Core
-Taxonomy
-Ingestion
-Domain
-Analytics
-Opportunity
-Action
-Measurement
-AI/Audit
+Schema
+Evidence Fidelity
+Playbook Compliance
+Economics Integrity
+Execution Completeness
+Policy Safety
+Recommendation Quality
 ```
 
-DB 구조의 세부 계약은 `LOOFIO_DATA_SCHEMA_V1.md`를 따른다.
-
----
-
-# 9. External Data Boundary
-
-외부 데이터는 Context다.
-
-예:
-
-- 날씨
-- 공휴일
-- 지역 행사
-- 생활인구
-- 상권
-- 경쟁 업종 분포
-
-외부 Context만으로 매출 효과를 단정하지 않는다.
+AI 실패:
 
 ```text
-Internal Business Data > External Context
+Opportunity remains
+Cause/Strategy deterministic outputs remain
+Playbook/Experiment template remains
+Deterministic Recommendation fallback
 ```
 
-외부 데이터는 가설 설명과 조건 보정에 사용한다.
+AI 실패가 Opportunity transaction을 rollback하지 않는다.
 
 ---
 
-# 10. Security Boundary
+# 9. Database Boundary
 
-반드시 분리하는 범위:
+현재 실행 가능한 스키마 Source of Truth:
 
 ```text
-Tenant A
-  Business A1
-  Business A2
-
-Tenant B
-  Business B1
+api/migrations/0001 ... current
 ```
 
-기본 규칙:
-
-- Repository query는 tenant scope 필수
-- File path/cached key에 tenant/business scope 포함
-- AI context에 다른 tenant 데이터 포함 금지
-- OAuth/secret 평문 DB 저장 금지
-- 고객 식별자는 tokenized key 우선
-
----
-
-# 11. Failure Isolation
-
-AI 실패가 Opportunity 생성 자체를 취소하면 안 된다.
+향후 additive entity 후보:
 
 ```text
-Detector Success
-→ Opportunity Persisted
-→ AI Recommendation Failed
-
-결과:
-Opportunity는 남아 있어야 함
-Recommendation만 retry
+cause_analysis_runs
+cause_candidates
+strategy_runs
+strategy_candidates
+playbook_definitions
+playbook_instances
+experiments
+recommendation_packages
+recommendation_quality_results
+channel_execution_records
 ```
 
-외부 채널 실행 실패 역시 추천/Opportunity 기록을 삭제하지 않는다.
+추가 원칙:
+
+- tenant/business scope
+- version
+- source references
+- immutable or append-only history가 필요한지 정의
+- status transition
+- idempotency
+- audit
+- retention
+- forward-fix
 
 ---
 
-# 12. Versioned Intelligence
+# 10. Channel Boundary
 
-다음은 버전이 필요하다.
+온라인:
+
+```text
+CRM / approved messaging
+Search Ads
+Social Ads
+Organic Social
+Map / Business Profile
+Website / Landing
+Booking Page
+Email
+```
+
+오프라인:
+
+```text
+Front-desk rebooking
+Waitlist operation
+Staff callback
+Local partnership
+Referral card/code
+In-store signage
+Tracked printed material
+```
+
+모든 실행은 최소 하나의 tracking 수단을 가진다.
+
+```text
+UTM
+unique URL
+booking source code
+coupon code
+partner code
+QR
+action_id
+manual source tagging
+```
+
+자동 실행은 현재 범위가 아니다.
+
+---
+
+# 11. External Context Boundary
+
+외부 데이터는 원인 확정이 아니라 가설 보조다.
+
+```text
+Weather
+Holiday
+Local Event
+Living Population
+Trade Area
+```
+
+허용:
+
+> 비 예보가 수요 감소 가설을 보조한다.
+
+금지:
+
+> 비 때문에 매출이 감소했다.
+
+---
+
+# 12. Security Boundary
+
+필수:
+
+- tenant/business scoped repository
+- tenant/business scoped cache/file/AI context
+- OAuth secret 평문 저장 금지
+- patient PII/clinical data AI 전송 금지
+- Action target 최소화
+- offline target/export 보존기간
+- audit log
+
+---
+
+# 13. Failure Isolation
+
+각 단계는 독립적으로 실패 상태를 가질 수 있다.
+
+```text
+Opportunity persisted
+Cause failed
+Strategy not run
+Playbook not applicable
+Experiment incomplete
+Quality rejected
+AI failed
+Channel failed
+Measurement inconclusive
+```
+
+실패한 후속 단계가 앞선 deterministic 결과를 삭제하지 않는다.
+
+---
+
+# 14. Versioned Intelligence
+
+버전 필수:
 
 ```text
 taxonomy mapping
 normalizer
 metric
 detector
-score
-prompt
-recommendation schema
+opportunity score
+cause analysis
+cause score
+strategy rules
+strategy score
+playbook
+experiment template
+recommendation package schema
+recommendation quality score
+prompt/model route
+channel execution contract
 measurement method
 ```
 
-목적은 과거 의사결정을 재현하는 것이다.
+과거 결과를 현재 버전으로 조용히 덮어쓰지 않는다.
 
 ---
 
-# 13. MVP Architecture Scope
+# 15. MVP Architecture Scope
 
-MVP에서 우선 완성할 경로:
+## 현재 완료
 
 ```text
-CSV/Excel
+CSV Import
 → Appointment Normalization
-→ BusinessEvent
 → Metrics
-→ LowDemandSlot / RevenueGap
-→ Opportunity
-→ AI Recommendation
-→ User Decision
+→ 4 Detectors
+→ Opportunity / Score
+→ Deterministic Recommendation
+→ Decision
 → Manual Action
-→ Result Input
-→ Measurement
+→ Result
+→ Baseline Measurement
 ```
 
-그 이후:
+## 다음 vertical slice
 
-- CancellationHotspot
-- DormantCustomer
-- ServiceDemandGap
-- 자동 Connector
-- 다른 Archetype Adapter
+```text
+LOW_DEMAND_SLOT
+→ deterministic Cause Candidates
+→ Strategy 2~3개 비교
+→ PB-01 선택
+→ Experiment Template
+→ Recommendation Package
+→ Quality Validator
+→ 기존 manual Action
+```
 
-순서로 확장한다.
+첫 vertical slice는 AI 없이 완성 가능하다.
+
+AI는 이후 설명·콘텐츠 초안에 연결한다.
 
 ---
 
-# 14. 아직 확정되지 않은 구현
+# 16. 현재 기술
 
-이 문서는 다음을 특정 제품으로 확정하지 않는다.
+확정:
 
-- Queue
-- Cache
-- Cloud
-- Monitoring vendor
-- AI provider/model routing
-- Secret Manager
-- Production migration runner
+```text
+Next.js / React / TypeScript
+FastAPI / Pydantic / psycopg
+PostgreSQL
+Google / Naver direct OAuth
+Server-side session
+GitHub Actions regression CI
+```
 
-해당 결정은 ADR로 추가한다.
+미확정:
+
+```text
+AI provider/model
+Queue/cache
+Staging/Production provider
+Monitoring
+Secret Manager
+Production migration runner
+External channel connector
+```

@@ -1,302 +1,398 @@
-# LOOFIO Code Ownership v1
+# LOOFIO Code Ownership v2
 
-## 1. 목적
+- 기준일: 2026-08-18
+- 기준 커밋: `0c75e524af5e9baa896e5685103ce8afe858b5a0`
+- 상태: 역할 기반 logical ownership
 
-LOOFIO 코드의 변경 책임과 필수 리뷰 영역을 논리적으로 정의한다.
-
-현재 실제 GitHub 팀/사용자 이름은 확정되지 않았으므로 이 문서는 **역할 기반 ownership**을 정의한다.
-
-실제 저장소에서는 `.github/CODEOWNERS.template`의 placeholder를 실제 GitHub handle/team으로 치환한다.
-
-## 1.1 현재 코드 경로 대응
-
-| Logical owner | 현재 경로 |
-|---|---|
-| Repository Maintainer | `/`, `docs`, `.github`, dependency manifest |
-| Core Platform | `api/app/auth`, `api/app/api/dependencies.py`, business store, `api/migrations` |
-| Data/Ingestion | `api/app/imports`, import routes/schemas, `sample-data` |
-| Opportunity Intelligence | `api/app/metrics`, `api/app/analytics`, `api/app/opportunities` |
-| Recommendation/Action | `api/app/recommendations`, `api/app/actions` |
-| Measurement | `api/app/results` |
-| Web Product | `apps/web/app` |
-
-1인 개발 단계의 실제 merge 방식은 `main_feature_git_workflow.md`를 따른다. 중요 계산·migration 변경은 ADR 또는 현재 상태 문서에 위험 관점 자기검토를 남긴다.
+실제 GitHub team/handle은 확정되지 않았다.
+`.github/CODEOWNERS` 적용 전 placeholder를 실제 계정으로 바꿔야 한다.
 
 ---
 
-# 2. Ownership 원칙
-
-Ownership은 독점 개발 권한이 아니다.
+# 1. Ownership 원칙
 
 Owner의 책임:
 
 - 설계 일관성
-- 보안/데이터 영향 검토
+- 데이터·보안 영향
 - API/DB 호환성
-- 테스트 충분성
-- 관련 문서 갱신
-- 위험 변경 승인
+- deterministic 재현성
+- version
+- 테스트와 golden fixture
+- 문서
+- rollout/rollback
+- 위험 승인
 
-다른 개발자가 코드를 수정할 수 있지만 중요 영역은 해당 논리적 Owner 리뷰를 거친다.
+Ownership은 독점 개발 권한이 아니다.
 
 ---
 
-# 3. Logical Owners
+# 1.1 Decision Intelligence Ownership
+
+Decision Intelligence는 다음 책임을 분리한다.
+
+```text
+Decision Input / Cause Analysis / Strategy
+Playbook / Experiment
+Recommendation Package / Quality
+AI Gateway / Explanation / Content
+Action / Channel / Measurement
+```
+
+한 Owner가 전체 파이프라인을 검토할 수는 있지만, 계산·정책·실행·측정 관점을 하나로 합쳐 승인하지 않는다.
+
+---
+
+# 2. Logical Owners
 
 ## Repository Maintainer
 
 범위:
 
 ```text
-/
-AGENTS.md
 docs/
-build configuration
-dependency manifest
+README
+build/dependency config
+cross-module architecture
 ```
 
 책임:
 
-- 전체 구조
+- Source of Truth
 - 문서 우선순위
-- cross-module 변경
-- 릴리즈 기준
+- release gate
+- cross-module change
 
 ## Core Platform Owner
 
 범위:
 
 ```text
-/modules/business
-/modules/taxonomy
-/data/repositories
-/data/migrations
-auth / tenant boundary
+api/app/auth
+tenant/business/location
+offerings/customers
+api/migrations
+repository scope
 ```
 
 책임:
 
-- Tenant isolation
-- DB schema
-- Business/Offering/Customer
-- migration 호환성
+- tenant isolation
+- schema/migration
+- auth/session
+- PII boundary
 
 ## Data Ingestion Owner
 
 범위:
 
 ```text
-/modules/ingestion
-/import
-/normalization
-/connectors/* input side
+api/app/imports
+mapping
+normalization
+lineage
+sample-data
 ```
 
 책임:
 
-- CSV/Excel/API import
-- column mapping
+- CSV contract
 - idempotency
-- PII/tokenization
-- source lineage
+- PII guard
+- invalid row handling
+- data quality
 
 ## Opportunity Intelligence Owner
 
 범위:
 
 ```text
-/analytics/metrics
-/analytics/detectors
-/analytics/scoring
-/ai/opportunity (설명이 아니라 orchestration인 경우)
+api/app/metrics
+api/app/analytics/detectors
+api/app/analytics/scoring
+api/app/opportunities
 ```
 
 책임:
 
-- Metric 정의
-- Detector 계산
+- Metric
+- Detector
+- Evidence
+- Estimate
 - Opportunity Score
-- Confidence
-- deterministic 재현성
-- versioning
+- version/regression
 
-## AI Recommendation Owner
+## Cause & Strategy Owner
 
-범위:
+목표 범위:
 
 ```text
-/ai/gateway
-/ai/explanation
-/ai/recommendation
-/ai/content
-prompt/schema
+decisioning/causes
+decisioning/strategies
+cause taxonomy
+strategy mapping
+economics/feasibility interfaces
 ```
 
 책임:
 
-- 모델 추상화
-- structured output
-- prompt version
-- hallucination guard
-- cost/latency
-- AI 데이터 최소화
+- cause hypothesis semantics
+- evidence/contradiction
+- strategy alternatives
+- no-action/data-collection
+- deterministic scoring
 
-## Action & Measurement Owner
+## Playbook & Experiment Owner
 
-범위:
+목표 범위:
 
 ```text
-/modules/marketing
-/measurement
-/action
-/results
+playbook registry
+applicability
+experiment templates
+evidence grade
+success/stop
 ```
 
 책임:
 
-- Recommendation → Action
-- Action status
+- Playbook status/version
+- precondition/contraindication
+- online/offline step quality
+- experiment integrity
+- quality of result source
+
+## Recommendation Package & Quality Owner
+
+목표 범위:
+
+```text
+future recommendation_packages
+recommendation package assembler
+quality validator
+legacy recommendation adapter
+```
+
+책임:
+
+- Package source·revision·status 계약
+- 대안·선택 이유·실행 단계 조립
+- Evidence fidelity와 limitation 전파
+- Quality Score·Section Floor·Hard Fail
+- Legacy Recommendation/Action 호환
+- 근거 없는 수치와 일반 조언 차단
+
+## AI Gateway & Content Owner
+
+목표 범위:
+
+```text
+AI gateway / provider adapter
+prompt / structured output schema
+explanation / content / staff script draft
+```
+
+책임:
+
+- provider abstraction
+- 최소 AI context와 PII 차단
+- structured output와 prompt version
+- deterministic source fidelity
+- cost / latency / failure isolation
+- AI가 score·경제성·measurement를 계산하지 않도록 보장
+
+## Action / Channel / Measurement Owner
+
+범위:
+
+```text
+api/app/actions
+api/app/results
+future channel_execution
+measurement methods
+```
+
+책임:
+
+- approval
+- Action state
+- tracking
 - Result
 - baseline
-- Measurement
-- Incremental estimate 표현
+- Evidence Grade
+- economics output
+- external execution safety
 
 ## Connector Owner
 
 범위:
 
 ```text
-/connectors
-/jobs/sync
+external data
+reservation/POS
+weather/public data
+messaging/ads
+sync jobs
 ```
 
 책임:
 
-- 외부 API
+- provider contract
 - OAuth/secret
-- retry
-- rate limit
-- provider compatibility
-- 외부 실행 안전성
+- retry/rate limit
+- external reference
+- delivery/result event
 
 ## Product/UI Owner
 
 범위:
 
 ```text
-/apps
-frontend
-dashboard
-opportunity/action/results UI
+apps/web
+Opportunity/Diagnosis/Plan/Action/Results UI
 ```
 
 책임:
 
-- Observation/Estimate/Recommendation 구분
-- Confidence/limitations 노출
-- 사용자 승인 흐름
-- API contract 준수
+- semantic separation
+- limitations/confidence/grade
+- alternative comparison
+- Quality status
+- approval UX
+- no causal overclaim
 
 ## Infrastructure/Security Owner
 
 범위:
 
 ```text
-deployment
 CI/CD
+staging/production
 secrets
 monitoring
-infrastructure
-security config
+backup/restore
+security configuration
 ```
 
 책임:
 
-- 배포
-- secret
+- deployment
 - runtime isolation
-- backup/restore
 - observability
-- incident 대응
+- incident/rollback
+- secure AI/connector config
 
 ---
 
-# 4. Mandatory Review Matrix
+# 3. Mandatory Review Matrix
 
 | 변경 | 필수 Owner |
 |---|---|
-| `AGENTS.md` | Repository Maintainer |
-| Architecture/Dependency | Repository Maintainer + 영향 영역 Owner |
-| Tenant/Auth | Core Platform + Infrastructure/Security |
-| DB migration | Core Platform |
-| PII/Customer token | Core Platform + Data Ingestion + Security |
-| Metric | Opportunity Intelligence |
-| Detector | Opportunity Intelligence |
-| Opportunity Score/Confidence | Opportunity Intelligence |
-| AI provider/model routing | AI Recommendation |
-| Prompt structured schema | AI Recommendation |
-| Recommendation 행동 정책 | AI Recommendation + Action/Measurement |
-| 외부 메시지/광고 실행 | Connector + Action/Measurement + Security |
+| AGENTS/Architecture/Dependency | Repository + 영향 Owner |
+| Tenant/Auth/Session | Core + Security |
+| PII/Tokenization | Core + Ingestion + Security |
+| DB migration | Core + 영향 Domain Owner |
+| Metric/Detector | Opportunity Intelligence |
+| Opportunity Score | Opportunity Intelligence |
+| Cause taxonomy/score | Cause & Strategy + Opportunity |
+| Cause→Strategy mapping | Cause & Strategy |
+| Strategy Score/Economics input | Cause & Strategy + Action/Measurement |
+| Playbook 신규/변경 | Playbook & Experiment + 관련 Domain |
+| Playbook ACTIVE 승격 | Playbook & Experiment + Product + Policy 영향 Owner |
+| Experiment method/Grade | Playbook & Experiment + Measurement |
+| Recommendation Package schema | Recommendation Package/Quality + API/Product |
+| Recommendation Quality Bar | Recommendation Package/Quality + Playbook/Experiment + Product |
+| AI provider/context/prompt | AI Gateway/Content + Security |
+| External message/ad execution | Connector + Action/Measurement + Security |
+| Offline partner execution | Action/Measurement + Product |
 | Measurement/Incrementality | Action/Measurement |
-| Public API breaking change | Repository Maintainer + 영향 Owner |
-| Deployment pipeline | Infrastructure/Security |
-| Prohibited changes 문서 | Repository Maintainer + 관련 Owner |
+| API breaking change | Repository + 영향 Owner |
+| Deployment/Secret | Security |
+| Prohibited Changes | Repository + 관련 Owner |
 
 ---
 
-# 5. High-Risk Two-Owner Rule
+# 4. High-Risk Multi-Owner Rule
 
-다음 변경은 최소 2개 논리 영역의 리뷰를 요구한다.
+최소 2개 영역의 리뷰가 필요한 변경:
 
-- 고객 데이터 외부 AI 전송 범위 증가
-- 자동 광고 집행
-- 자동 고객 메시지
-- Tenant isolation 변경
-- 데이터 삭제/보존 정책
-- 실제 매출 귀속/Incrementality 계산
-- 대규모 destructive migration
-- API 인증 방식
-- 운영 secret 처리
+- patient/customer data를 AI에 더 많이 전송
+- Quality Gate 완화
+- Playbook contraindication 완화
+- Hospital policy 변경
+- 자동 메시지·광고·쿠폰
+- budget automation
+- Incremental Revenue 표시
+- tenant isolation
+- destructive migration
+- production secret/auth
+- offline partner compensation logic
 
-팀 규모가 1명인 동안에도 PR 설명에 **두 관점의 체크리스트**를 별도로 작성하여 자기 검토한다.
-
----
-
-# 6. CODEOWNERS 적용
-
-현재 template:
-
-```text
-.github/CODEOWNERS.template
-```
-
-실제 저장소 연결 후:
-
-```text
-.github/CODEOWNERS
-```
-
-로 복사하고 placeholder를 GitHub 사용자/팀으로 변경한다.
-
-예:
-
-```text
-/analytics/detectors/ @loofio-opportunity
-/ai/                   @loofio-ai
-/data/migrations/      @loofio-core
-```
-
-실제 handle이 확정되기 전 가짜 팀명을 CODEOWNERS에 넣어 merge 보호가 작동한다고 가정하지 않는다.
+1인 개발 단계에서도 PR/변경기록에 서로 다른 관점의 자기검토를 분리한다.
 
 ---
 
-# 7. Ownership 변경
+# 5. Playbook Ownership
 
-새 팀이 생기거나 모듈이 분리될 경우:
+각 Playbook은 메타데이터를 가진다.
 
-1. 이 문서 수정
-2. CODEOWNERS 수정
-3. branch protection 확인
-4. 관련 runbook/alert ownership 수정
+```text
+owner
+version
+status
+last_reviewed_at
+policy_tags
+historical_execution_count
+result_connection_rate
+```
 
-순서로 반영한다.
+`ACTIVE` 승격은 단순 문서 작성이 아니라 내부 검증 또는 pilot 근거가 필요하다.
+
+---
+
+# 6. Quality Ownership
+
+Recommendation Quality Validator의 규칙 변경은 일반 UI/문구 변경이 아니다.
+
+필수 검토:
+
+- Evidence
+- Economics
+- Experiment
+- Policy
+- Product UX
+
+Quality score weight 변경 시 version을 올린다.
+
+---
+
+# 7. CODEOWNERS 적용 후보
+
+현재 `main`에는 `.github/CODEOWNERS`와 `.github/CODEOWNERS.template`이 없다. 따라서 아래는 논리적 후보이며 실제 branch protection이 적용된 것으로 간주하지 않는다.
+
+```text
+/api/app/analytics/                 @OPPORTUNITY_OWNER
+/api/app/decisioning/               @CAUSE_STRATEGY_OWNER
+/api/app/playbooks/                 @PLAYBOOK_EXPERIMENT_OWNER
+/api/app/recommendation_packages/   @RECOMMENDATION_PACKAGE_OWNER
+/api/app/ai/                        @AI_GATEWAY_OWNER
+/api/app/actions/                   @ACTION_MEASUREMENT_OWNER
+/api/app/results/                   @ACTION_MEASUREMENT_OWNER
+/api/migrations/                    @CORE_PLATFORM_OWNER
+/apps/web/                          @PRODUCT_UI_OWNER
+/docs/                              @REPOSITORY_MAINTAINER
+```
+
+실제 GitHub 사용자·팀이 확정되면 `.github/CODEOWNERS`를 새로 만들고 branch protection과 함께 검증한다.
+
+---
+
+# 8. Ownership 변경
+
+1. 이 문서
+2. CODEOWNERS
+3. branch protection
+4. alerts/runbook
+5. Playbook metadata
+
+순서로 갱신한다.

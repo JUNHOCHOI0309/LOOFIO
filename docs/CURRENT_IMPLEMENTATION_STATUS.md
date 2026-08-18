@@ -1,11 +1,30 @@
 # LOOFIO 현재 구현 상태
 
-- 기준일: 2026-08-17
+- 기준일: 2026-08-18
 - 기준 브랜치: `main`
-- 기준 커밋: `b7cc45d` (`merge: add versioned opportunity scoring`)
+- `code_baseline_commit`: `b7cc45d58b1fe1faa592888fd63f652ce0174f4a`
+- `source_document_alignment_commit`: `0c75e524af5e9baa896e5685103ce8afe858b5a0`
+- `document_alignment_commit`: GitHub 반영 후 실제 commit SHA로 갱신
+- 문서 패키지: `decision-intelligence-docs-v1`
 - 제품 범위: Hospital Appointment MVP
 
-이 문서는 기획 문서와 실제 코드 사이의 현재 상태를 연결하는 단일 기준이다. 장기 방향은 기술 로드맵과 Opportunity Engine 문서를 따르고, 실제 제공 기능을 판단할 때는 이 문서를 먼저 확인한다.
+이 문서는 기획 문서와 실제 코드 사이의 현재 상태를 연결하는 단일 기준이다.
+
+```text
+migration / code / test
+→ 현재 구현 사실
+
+Decision Intelligence 상세 문서
+→ 목표 설계
+
+문서 존재
+!=
+구현 완료
+```
+
+전체 문서 읽기 순서와 상태 분류는 `00_PLANNING_INDEX.md`, 확정·임시·미결정 사항은 `DECISION_REGISTER_V2.md`를 따른다.
+
+---
 
 ## 1. 현재 동작하는 제품 루프
 
@@ -17,16 +36,30 @@ Google/Naver OAuth 로그인
 → Metric 계산
 → 4개 Detector 실행
 → Opportunity 저장·점수화
-→ 수동 Recommendation 초안·사용자 결정
+→ deterministic Recommendation 초안·사용자 결정
 → Manual Action 계획·상태 변경
 → Result 기록
 → 직전 동일 기간 Baseline과 Measurement 비교
 → Dashboard 이력 확인
 ```
 
-외부 메시지·광고·쿠폰·게시 채널은 호출하지 않는다. Measurement의 변화량은 단순 관찰 비교이며 인과효과나 Incremental Revenue가 아니다.
+현재 외부 메시지·광고·쿠폰·게시 채널은 호출하지 않는다.
 
-## 2. 기능별 상태
+현재 Measurement의 변화량은 단순 관찰 비교다.
+
+```text
+Observed Delta
+!=
+인과효과
+!=
+Incremental Revenue
+!=
+ROI
+```
+
+---
+
+## 2. 기능별 현재 구현
 
 | 영역 | 상태 | 현재 구현 |
 |---|---|---|
@@ -38,20 +71,22 @@ Google/Naver OAuth 로그인
 | 정규화 | 구현 | `Hospital Appointment v1`, 상태 5종, 금액·시간 파싱, 오류 행 반환 |
 | 데이터 안전 | 구현 | import idempotency, source lineage, 가명 customer token, 원문 PII guard |
 | Metric Engine | 구현 | 예약·완료·취소·노쇼·실제 완료 매출, 요일×2시간 슬롯 집계 |
-| LowDemandSlot | 구현 | 최소 관측 주와 상대 Demand Index 기반 `low-demand-slot-v1` |
+| LowDemandSlot | 구현 | 최소 관측 주와 상대 Demand Index 기반 Detector |
 | RevenueGap | 구현 | 같은 요일 비교 시간대 결제 표본 기반 금액 Estimate v2 |
 | CancellationHotspot | 구현 | 슬롯×Offering 예약 이탈률과 사업장 기준 비교 |
 | DormantCustomer | 구현 | 명시적 기준일과 재방문 간격 기반 지연 Observation |
 | ServiceDemandGap | 구현 | Offering 전체 비중과 슬롯 비중 비교 |
 | Opportunity | 구현 | Detector version·evidence·limitations·Observation/Estimate 분리 저장 |
 | Opportunity Score | 구현 | `opportunity-score-v1`, 35/30/20/15 구성요소·버전 저장 및 UI 표시 |
-| Recommendation | 부분 구현 | 유형별 deterministic 수동 검토 초안과 결정 이력. LLM 호출은 없음 |
+| Recommendation | 부분 구현 | 유형별 deterministic 수동 검토 초안과 결정 이력. LLM 호출 없음 |
 | Action | 구현 | 승인된 Recommendation의 manual 계획, 단방향 상태 전이와 감사 이력 |
 | Result | 구현 | 완료 Action의 실행 요약·측정 기간·실제 지출 기록 |
-| Measurement | MVP 구현 | 직전 1~4주 동일 길이 창의 평균과 signed delta 계산 |
+| Measurement | MVP 구현 | `same-window-prior-four-weeks-v2`, 직전 1~4주 동일 길이 창 평균과 signed delta |
 | Dashboard | 구현 | Metric·Detector·Opportunity·Score·Recommendation·Action·Result·Measurement 표시 |
-| 회귀 검증 | 구현 | backend 66 tests, sample pack 제품 루프, web typecheck/build |
+| 회귀 검증 | 구현 | backend 66 tests, sample-pack 제품 루프, web typecheck/build |
 | CI | 구현 | GitHub Actions `Regression checks`, `feature/fix/test/ci`와 `main` push 검사 |
+
+---
 
 ## 3. Detector와 Opportunity 계약
 
@@ -62,20 +97,34 @@ Google/Naver OAuth 로그인
 | `DORMANT_CUSTOMER` | `dormant-customer-v1` | 없음 | `manual_revisit_cohort_review` |
 | `SERVICE_DEMAND_GAP` | `service-demand-gap-v1` | 없음 | `manual_offering_slot_review` |
 
-모든 유형은 `opportunity-score-v1`으로 검토 우선순위를 계산한다. 점수는 성공 확률이나 매출 가치가 아니다.
+모든 유형은 `opportunity-score-v1`으로 검토 우선순위를 계산한다.
 
-## 4. 데이터와 표본
+```text
+Opportunity Score
+!=
+성공 확률
+!=
+예상 매출
+!=
+Action 효과
+```
+
+---
+
+## 4. 현재 데이터와 표본
 
 프로젝트 표본은 `sample-data/appointments`에 보관한다.
 
-- `loofio_appointment_sample_hospital_v1.csv`: Hospital v1 기본 계약
-- `hospital_revenue_gap_positive_v1.csv`: 결제 표본이 충분한 RevenueGap 양성 시나리오
-- `hospital_revenue_gap_sparse_payment_v1.csv`: 결제 표본 부족으로 Estimate를 생략하는 시나리오
-- `hospital_operational_mix_v1.csv`: 여러 Offering·취소·재방문 패턴이 섞인 전체 제품 루프
+- `loofio_appointment_sample_hospital_v1.csv`
+- `hospital_revenue_gap_positive_v1.csv`
+- `hospital_revenue_gap_sparse_payment_v1.csv`
+- `hospital_operational_mix_v1.csv`
 
-회귀 테스트는 CSV parsing부터 Detector, Opportunity, Recommendation, Action, Result, Measurement까지 연결한다.
+현재 회귀 테스트는 CSV parsing부터 Detector, Opportunity, Recommendation, Action, Result, Measurement까지 연결한다.
 
-## 5. 코드 위치
+---
+
+## 5. 현재 코드 위치
 
 | 역할 | 실제 위치 |
 |---|---|
@@ -94,30 +143,103 @@ Google/Naver OAuth 로그인
 | PostgreSQL migration | `api/migrations` |
 | 회귀 테스트 | `api/tests` |
 
-## 6. 아직 구현하지 않은 범위
+---
 
-- 실제 AI Gateway, provider adapter, LLM 기반 구조화 설명·추천
-- Excel 파일 import와 예약/POS API connector
+## 6. Decision Intelligence 문서 상태
+
+다음 문서 설계는 완료됐지만 코드·migration·test에는 아직 반영되지 않았다.
+
+| 영역 | 문서 상태 | 구현 상태 |
+|---|---|---|
+| Planning / Decision | Planning Index, Decision Register, Roadmap, Backlog 완료 | 미구현 |
+| Decision Input | D0~D4, 상태·출처·신선도 계약 완료 | 미구현 |
+| Cause Analysis | Cause taxonomy·Evidence·Diagnostic·Score 설계 완료 | 미구현 |
+| Strategy | Hard Gate·대안 비교·DATA_COLLECTION·NO_ACTION 설계 완료 | 미구현 |
+| Playbook | Definition·Applicability·Instance, Hospital Core 12개 설계 완료 | 미구현 |
+| Experiment | Method·Grade·Precision·Success·Stop 계약 완료 | 미구현 |
+| Recommendation Package | Package Type·Revision·Legacy Adapter 설계 완료 | 미구현 |
+| Recommendation Quality | 75점·Section Floor·Hard Fail v1 설계 완료 | 미구현 |
+| Measurement Framework | Actual·Estimate·Delta·Incremental·Economics 의미 분리 설계 완료 | 미구현 |
+| Channel Execution | Manual·Copy·Staff·Connector 수준과 Event 계약 완료 | 미구현 |
+| DI Data Schema | `0012~0020` additive proposal 완료 | migration 미작성 |
+| DI API Contract | Preview-first·Persistence·Execution API proposal 완료 | endpoint 미작성 |
+| ADR | `0020~0025` Decision Intelligence 결정 기록 완료 | 문서 결정이며 코드 구현 아님 |
+
+---
+
+## 7. 아직 구현하지 않은 범위
+
+- Decision Context Snapshot과 D0~D4 Readiness
+- Cause Analysis와 Diagnostic Question
+- Strategy Engine, Hard Gate, Strategy Score
+- Versioned Playbook Registry Runtime과 Instance
+- Experiment Definition·Assignment·Evaluation
+- Recommendation Package v2와 Quality Validator
+- Decision Intelligence Preview API
+- Decision Intelligence `0012~0020` migration
+- Package 기반 UI와 기존 Manual Action Adapter
+- Measurement Framework Adapter·Treatment/Comparison 계산
+- Structured Manual/Staff Execution Package
+- 실제 AI Gateway, provider adapter, LLM 설명·콘텐츠
+- Excel import와 예약/POS API connector
 - 날씨·공휴일·상권·지역 행사 등 External Context
 - 고객 메시지, 광고, 쿠폰, 게시 등 외부 채널 실행
-- 자동 실행·예산 통제·예약 실행·재시도 queue
-- 인과 추론, Incrementality, ROI, A/B test
-- Appointment 외 Sale·Membership·Lead 등 다른 Archetype adapter
-- Staging/Production 배포, Secret Manager, migration 자동 실행
-- 운영 monitoring, error tracking, backup/restore 자동화
+- 자동 실행·예산 통제·queue·kill switch
+- 인과 추론, Production Grade Incrementality, ROI
+- Appointment 외 다른 Archetype adapter
+- Staging/Production 배포와 운영 monitoring
 
-## 7. 다음 구현 우선순위
+---
 
-1. Opportunity의 숫자를 바꾸지 않는 structured AI Explanation/Recommendation contract
-2. provider 중립 AI Gateway와 실패 격리·감사·재시도 경계
-3. Staging 배포 및 migration/smoke-test 자동화
-4. 실제 병원 CSV 변형 표본 확대와 mapping 회귀 시나리오 강화
-5. 외부 Context를 원인 확정이 아닌 가설 보조 정보로 연결
+## 8. 다음 구현 우선순위
 
-## 8. 문서 해석 규칙
+실제 로컬 구현은 `LOOFIO_IMPLEMENTATION_BACKLOG_V1.md`를 따른다.
 
-- `ADR`은 해당 시점의 의사결정 기록이므로 현재 상태에 맞춰 과거 문장을 수정하지 않는다.
-- 구현 여부는 이 문서와 코드·migration·test를 함께 확인한다.
-- API 필드와 의미는 `API_CONTRACT.md`가 우선한다.
-- 제품의 장기 목표와 미구현 범위는 `LOOFIO_TECH_ROADMAP_v1.md`를 따른다.
+```text
+B01 Decision Contract
+→ DI-001~DI-005
+→ QA-001 / QA-003 / QA-004
+
+B02~B03 Cause Pure Domain / Preview / Regression
+
+B04~B05 Strategy Pure Domain / Preview / Regression
+
+B06~B10 Playbook / Experiment / Package / Quality Preview
+
+B11 UI / 기존 Manual Action Handoff
+
+B12~B13 Current Measurement Adapter / Manual·Staff Execution
+
+M8 Persistence
+→ migration preflight
+→ 0012~0020 단계 적용
+```
+
+AI는 deterministic Package와 Quality Preview가 안정된 뒤 별도 Epic으로 연결한다.
+
+---
+
+## 9. 문서 해석 규칙
+
+- `00_PLANNING_INDEX.md`는 문서 상태와 읽기 순서의 단일 진입점이다.
+- `DECISION_REGISTER_V2.md`는 확정·임시·미결정·폐기 결정을 관리한다.
+- 기존 `ADR 0001~0019`는 과거 시점의 기록이므로 수정하지 않는다.
+- `ADR 0020~0025`는 목표 Decision Intelligence 구조를 결정하지만 구현 완료를 뜻하지 않는다.
+- 현재 구현 여부는 migration·code·test와 본 문서를 함께 확인한다.
+- 현재 API 필드와 의미는 `API_CONTRACT.md`가 우선한다.
+- 신규 목표 API는 `LOOFIO_API_CONTRACT_DECISION_INTELLIGENCE_V1.md`를 따른다.
+- 현재 DB 구조는 `LOOFIO_DATA_SCHEMA_V1.md`가 설명하며 migration이 최종 기준이다.
+- 신규 목표 DB는 `LOOFIO_DATA_SCHEMA_DECISION_INTELLIGENCE_V1.md`의 proposal을 따른다.
 - Detector 계산 근거는 `LOOFIO_OPPORTUNITY_ENGINE_V1.md`와 관련 ADR을 따른다.
+
+---
+
+## 10. 문서 반영 후 확인
+
+이 문서 묶음을 GitHub에 반영한 뒤 다음 값을 실제 commit SHA로 갱신한다.
+
+```text
+document_alignment_commit
+```
+
+문서 반영만으로 기능 상태 표의 `미구현`을 `구현`으로 바꾸지 않는다.

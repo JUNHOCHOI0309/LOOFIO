@@ -1,48 +1,60 @@
-# LOOFIO Deployment Flow v1
+# LOOFIO Deployment Flow v2
 
-## 1. 상태
+- 기준일: 2026-08-18
+- 기준 커밋: `0c75e524af5e9baa896e5685103ce8afe858b5a0`
+- 상태: 현재 GitHub Actions CI + 목표 Staging/Production Gate
 
-현재 LOOFIO의 실제 클라우드와 컨테이너 플랫폼은 확정되지 않았다. 회귀 검증 CI는 GitHub Actions를 사용한다.
+## 1. 현재 상태
 
-따라서 이 문서는 **공급자 독립적인 배포 계약**을 정의하며, CI의 최소 구현 범위만 명시한다.
+현재 구현:
 
-현재 `.github/workflows/regression.yml`은 `main`, `feature/**`, `fix/**`, `test/**`, `ci/**` push와 수동 실행에서 다음을 수행한다.
+```text
+GitHub Actions Regression checks
+backend tests
+sample pack product loop
+web typecheck/build
+main / feature / fix / test / ci push checks
+```
 
-- Python 3.12에서 전체 backend test와 sample-pack 제품 루프 회귀 테스트
-- Node.js 22에서 web typecheck와 production build
+아직 미구현:
 
-이 workflow는 배포·migration·secret 접근을 수행하지 않는다. Staging/Production 배포 방식은 별도 결정이 필요하다.
+```text
+Staging
+Production deploy
+Managed secret
+Production migration runner
+Monitoring
+Backup/restore automation
+External channel execution
+```
 
 ---
 
 # 2. 환경
 
-최소 환경:
+목표:
 
 ```text
 Local / Test
-↓
-Staging
-↓
-Production
+→ Preview(optional)
+→ Staging
+→ Production
 ```
 
-가능하면 Preview 환경을 PR 단위로 추가한다.
+Staging과 Production은 DB·secret·OAuth callback·external account를 분리한다.
 
-Production과 Staging은 데이터/secret을 분리한다.
-
-운영 고객 데이터를 Staging에 그대로 복사하지 않는다.
+운영 환자·고객 원문 데이터를 Staging에 그대로 복사하지 않는다.
 
 ---
 
 # 3. Git Flow
 
-현재 1인 개발 기본 흐름:
+## 현재 1인 개발 흐름
 
 ```text
 feature/fix branch
 → local test
-→ commit / branch push
+→ branch push
 → GitHub Actions regression
 → local --no-ff merge to main
 → main push
@@ -50,266 +62,340 @@ feature/fix branch
 → branch delete
 ```
 
-Pull Request는 현재 기본 절차가 아니다. 상세 명령과 예외는 `main_feature_git_workflow.md`를 따른다. Production 배포가 연결되면 main CI 이후 staging·smoke·승인·production 단계를 추가해야 한다.
+현재 Pull Request는 필수 절차가 아니다. 상세 명령은 `main_feature_git_workflow.md`를 따른다.
 
-장기 release branch 전략이 필요해지기 전에는 단순한 main 중심 흐름을 우선한다.
+## 목표 협업·배포 흐름
+
+```text
+feature/fix branch
+→ Pull Request
+→ CI
+→ Logical Owner Review
+→ main
+→ Staging deploy
+→ Smoke / Intelligence Regression
+→ Production approval
+→ Production deploy
+```
+
+Production 연결 전에는 목표 흐름을 현재 배포 기능으로 표현하지 않는다.
 
 ---
 
-# 4. Merge Gate
+# 4. Pull Request Gate
 
-현재 자동화된 확인:
+공통:
 
-- unit test
-- backend API·tenant·Detector·제품 루프 회귀 test
-- web TypeScript typecheck
-- web production build
+- backend tests
+- frontend typecheck/build
+- lint/static check
+- migration ordering/validation
+- tenant isolation
+- API contract
+- security/dependency scan
+- sample-data regression
 
-변경 범위에 따라 사람이 추가 확인:
+Decision Intelligence 변경 시 추가:
 
-- `git diff --check`, 의도한 파일만 stage, Secret 포함 여부
-- migration transaction 검증과 rollback/호환 경로
-- API contract·tenant isolation·Detector version·표본 시나리오
-
-아직 CI에 추가하지 않은 gate:
-
-- dependency/security scan
-- OpenAPI schema diff
-- 실제 PostgreSQL integration migration
-- Staging smoke test
-
-중요 파일 변경 시 logical owner 검토 또는 1인 개발 위험 자기검토 기록을 추가한다. 다인 협업으로 전환하면 CODEOWNERS와 PR review gate를 활성화한다.
+- Cause evidence fixture
+- cause-not-fact test
+- Strategy alternative/rank fixture
+- `NO_ACTION` / `DATA_COLLECTION` case
+- Playbook applicability/contraindication
+- Economics unknown/zero
+- Experiment completeness
+- Evidence Grade
+- Recommendation Quality score
+- Hard Fail
+- AI invented numeric value = 0
+- legacy Recommendation/Action compatibility
 
 ---
 
 # 5. Migration Gate
 
-DB migration이 포함되면 반드시 분리 확인한다.
+Safe additive:
 
-## Safe 기본
+```text
+new nullable table/column
+new version field
+new index
+new optional API relation
+```
 
-- additive table
-- nullable column
-- new index
-- compatible enum strategy
+Risky:
 
-## Risky
+```text
+rename/type change
+NOT NULL on existing rows
+drop
+large backfill
+FK rewrite
+legacy Recommendation/Action relation replacement
+```
 
-- column rename
-- type change
-- NOT NULL 즉시 추가
-- large backfill
-- table/column drop
-- unique constraint 추가
+Risky migration은 expand/contract로 나눈다.
 
-Risky migration은 expand/contract를 기본으로 한다.
+Decision Intelligence entity 추가 시 확인:
 
-대용량 index/backfill은 production lock/부하를 검토한다.
+```text
+tenant/business FK
+version
+source refs
+status
+audit
+idempotency
+retention
+rollback/forward-fix
+```
 
 ---
 
-# 6. Staging Deploy
+# 6. Intelligence Compatibility Gate
 
-Staging 배포 후 확인:
+다음 version 변경을 별도로 검토한다.
+
+```text
+metric
+detector
+opportunity score
+cause analysis
+cause score
+strategy mapping/score
+playbook
+experiment template
+recommendation package
+quality validator
+AI prompt/model route
+channel contract
+measurement method
+```
+
+새 version이 과거 record를 조용히 재해석하지 않는지 확인한다.
+
+---
+
+# 7. Staging Smoke
+
+최소:
 
 ```text
 Health
-Auth
+OAuth / Session
 Tenant isolation
-DB migration
-CSV import
-Normalization
-Metric
-Detector
-Opportunity
-Recommendation
-Decision
-Action
-Measurement
+Migration
+CSV inspect / preview / import
+Mapping reuse
+Metrics
+4 Detectors
+Opportunity refresh / score
+Legacy Recommendation / Decision
+Manual Action / Result / Measurement
 ```
 
-모든 배포에서 전체 E2E가 필요하지는 않지만 변경 영역의 핵심 경로는 smoke test한다.
+Decision Intelligence 구현 후 추가:
+
+```text
+Cause Analysis
+Strategy alternatives
+Playbook resolution
+Experiment draft
+Recommendation Package
+Quality Gate
+Fallback
+```
 
 ---
 
-# 7. Production Approval Gate
+# 8. Recommendation Quality Release Gate
 
-다음 변경은 production 수동 승인 단계를 요구한다.
+다음 중 하나라도 실패하면 Recommendation v2 rollout을 중단한다.
+
+- numeric evidence mismatch
+- cause fact assertion
+- Quality Hard Fail bypass
+- target/period/budget/metric 누락
+- unknown economics→0
+- Playbook contraindication 위반
+- Experiment success/stop 누락
+- Hospital policy violation
+- cross-tenant context
+- legacy flow regression
+
+---
+
+# 9. Production Approval
+
+수동 승인 필수:
 
 - DB migration
-- auth/permission
-- tenant boundary
-- customer PII
+- auth/session
+- tenant
+- PII/AI context
 - Detector/Score
-- Measurement/Incrementality
-- external channel execution
-- AI provider 데이터 정책 영향
+- Cause/Strategy rules
+- Playbook ACTIVE 승격
+- Quality weight/threshold
+- Experiment/Measurement method
+- external action
 - secret/infrastructure
-- API breaking/migration
-
-초기 1인 개발에서도 자동 production push보다 확인 단계를 둔다.
+- API compatibility
 
 ---
 
-# 8. Production Deploy
-
-권장 순서:
+# 10. Production Deploy 순서
 
 ```text
-1. release artifact 고정
+1. immutable artifact
 2. config/secret validation
-3. backward-compatible migration
-4. application deploy
-5. health check
-6. smoke test
-7. metric/log 확인
-8. release 기록
+3. compatible migration
+4. backend deploy
+5. frontend deploy
+6. health
+7. smoke
+8. intelligence distribution check
+9. logs/metrics
+10. release record
 ```
 
-artifact는 Staging에서 검증한 동일 버전을 Production에 사용한다.
-
-Production에서 다시 build하여 다른 결과물을 만들지 않는 방향을 권장한다.
+Staging에서 검증한 동일 artifact를 사용한다.
 
 ---
 
-# 9. Post-Deploy Checks
+# 11. Post-Deploy Monitoring
 
-최소 관찰:
+기본:
 
-- error rate
-- latency
-- DB connection
-- job failure
+- error/latency
+- DB/session
 - import failure
-- AI request failure/cost
-- connector errors
-- Detector candidate 급증/급감
-- tenant isolation/security alert
+- Detector candidate distribution
+- Opportunity count/score distribution
+- Action/Result/Measurement failure
+- tenant/security alert
 
-Detector 변경 시 단순 서버 health만 보지 않는다.
+Decision Intelligence:
 
-분석 결과 분포 변화도 확인한다.
+- Cause run failure
+- top cause distribution
+- Strategy rank distribution
+- no-action rate
+- Playbook selection
+- Quality pass/reject/hard fail
+- AI failure/cost
+- numeric mismatch
+- package acceptance/modification
+- result connection
 
----
-
-# 10. Rollback
-
-코드 rollback과 데이터 rollback을 구분한다.
-
-## Code
-
-이전 안정 artifact로 되돌린다.
-
-## Database
-
-무조건 down migration을 실행하지 않는다.
-
-데이터 손실 위험이 있다면 forward fix를 우선한다.
-
-## Detector / AI
-
-버전별 feature flag 또는 runtime config가 가능하면 이전 버전으로 되돌릴 수 있게 한다.
-
-## External Action
-
-이미 고객에게 발송/게시된 행동은 코드 rollback으로 취소되지 않을 수 있다.
-
-Action 상태와 외부 execution reference를 이용해 별도 운영 대응한다.
+변화가 크면 제품 개선으로 단정하지 않고 regression 여부를 먼저 확인한다.
 
 ---
 
-# 11. Hotfix
-
-긴급 수정:
+# 12. Feature Rollout
 
 ```text
-incident
-→ short-lived hotfix branch
-→ 최소 CI
-→ 필수 review
-→ production
-→ main에 반드시 반영
-→ 사후 기록
-```
-
-운영 서버만 직접 고치고 저장소에 반영하지 않는 방식을 금지한다.
-
----
-
-# 12. Secret
-
-금지:
-
-- repository commit
-- Docker image bake-in
-- frontend bundle
-- 로그 출력
-
-사용:
-
-- 환경별 secret store
-- 최소 권한
-- rotation 가능
-- 접근 감사
-
-실제 Secret Manager 제품은 추후 결정한다.
-
----
-
-# 13. Feature Rollout
-
-고위험 기능은 가능하면 단계 배포한다.
-
-예:
-
-```text
-internal
+disabled
+→ internal fixtures
 → selected test businesses
-→ limited %
+→ pilot
+→ limited rollout
 → general
 ```
 
-대상:
+Playbook도 별도 상태를 가진다.
 
-- 새 Detector
-- Recommendation 전략
-- 외부 자동 실행
-- Measurement 방법
-- 새 AI model route
+```text
+DRAFT
+VALIDATED_INTERNAL
+PILOT
+ACTIVE
+```
+
+새 Playbook을 전체 tenant에 즉시 활성화하지 않는다.
+
+---
+
+# 13. Rollback / Disable
+
+코드:
+
+- 이전 artifact
+
+DB:
+
+- destructive down migration보다 forward-fix 우선
+
+Intelligence:
+
+- version/feature flag로 이전 rule·Playbook·Quality validator
+- new package generation disable
+- legacy deterministic recommendation fallback
+
+AI:
+
+- provider disable
+- deterministic template fallback
+
+External Action:
+
+- 이미 발송·게시된 결과는 코드 rollback으로 취소되지 않음
+- execution reference와 운영 절차로 대응
 
 ---
 
 # 14. Release Record
 
-각 production release에 최소 기록:
+필수:
 
 ```text
-version/commit
+commit / artifact
 deployed_at
 migration
-changed detectors
-changed prompts/models
-API changes
+API change
+metric/detector/score version
+cause/strategy version
+playbook additions/status
+experiment version
+recommendation package version
+quality validator version
+AI provider/model/prompt
+measurement method
 known limitations
-rollback path
+rollout scope
+rollback/disable path
 owner
 ```
-
-과거 Opportunity/Recommendation을 재현하기 위해 Intelligence version 변경도 기록한다.
 
 ---
 
 # 15. 배포 실패 기준
 
-다음은 배포 실패로 간주한다.
+- tenant/PII 노출
+- migration failure
+- import corruption
+- deterministic numeric mismatch
+- Quality Gate bypass
+- generic recommendation final 노출
+- policy violation
+- unapproved external execution
+- API contract violation
+- secret exposure
+- result/measurement semantic corruption
 
-- tenant 데이터 노출 가능성
-- migration 오류
-- 핵심 import 실패
-- Opportunity 결과 비정상 급변
-- API contract 위반
-- 고객 승인 없는 외부 action 실행
-- AI 응답이 deterministic 숫자를 오염
-- secrets 노출
+새 기능 유지보다 disable/rollback을 우선한다.
 
-이 경우 새 기능 유지보다 rollback/disable을 우선한다.
+---
+
+# 16. Hotfix
+
+```text
+incident
+→ hotfix branch
+→ minimum CI
+→ mandatory review
+→ deploy
+→ main 반영
+→ postmortem / release record
+```
+
+운영만 직접 수정하고 repository에 반영하지 않는 방식을 금지한다.
