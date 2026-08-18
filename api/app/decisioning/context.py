@@ -113,12 +113,86 @@ class ResultSource(str, Enum):
     CONNECTOR_DELIVERY_EVENT = "connector_delivery_event"
 
 
+class ImportStatus(str, Enum):
+    COMPLETED = "completed"
+    PARTIAL = "partial"
+    FAILED = "failed"
+
+
+class DataValidationStatus(str, Enum):
+    VALID = "valid"
+    INVALID = "invalid"
+    CONFLICTING = "conflicting"
+
+
 class OpportunityContext(ContractModel):
     opportunity_type: Literal["LOW_DEMAND_SLOT"]
     detector_code: str = Field(min_length=1)
     detector_version: str = Field(min_length=1)
     evidence_refs: tuple[str, ...] = Field(min_length=1)
     limitations: tuple[str, ...] = ()
+
+
+class LowDemandObservation(ContractModel):
+    observed_weeks: int = Field(ge=0)
+    average_appointments_per_week: float = Field(ge=0)
+    comparison_median_per_week: float = Field(gt=0)
+    demand_index: float = Field(ge=0)
+
+
+class BusinessConstraintContext(ContractModel):
+    # In the first slice this is the verified answer to whether the target slot is open.
+    business_hours: DecisionField[bool] | None = None
+
+
+class DataQualityContext(ContractModel):
+    import_status: DecisionField[ImportStatus] | None = None
+    validation_status: DecisionField[DataValidationStatus] | None = None
+    source_lineage_available: DecisionField[bool] | None = None
+    data_freshness_at: DecisionField[datetime] | None = None
+    timezone_validation_status: DecisionField[DataValidationStatus] | None = None
+    mapping_profile_version: DecisionField[str] | None = None
+    valid_row_count: DecisionField[int] | None = None
+    rejected_row_count: DecisionField[int] | None = None
+    duplicate_row_count: DecisionField[int] | None = None
+    unknown_status_count: DecisionField[int] | None = None
+    missing_required_field_count: DecisionField[int] | None = None
+    offering_resolution_rate: DecisionField[float] | None = None
+    customer_token_coverage_rate: DecisionField[float] | None = None
+    payment_coverage_rate: DecisionField[float] | None = None
+    limitations: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_ranges(self) -> DataQualityContext:
+        nonnegative = (
+            self.valid_row_count,
+            self.rejected_row_count,
+            self.duplicate_row_count,
+            self.unknown_status_count,
+            self.missing_required_field_count,
+        )
+        for field in nonnegative:
+            if field is not None and field.value is not None and field.value < 0:
+                raise ValueError("data quality count cannot be negative")
+        rates = (
+            self.offering_resolution_rate,
+            self.customer_token_coverage_rate,
+            self.payment_coverage_rate,
+        )
+        for field in rates:
+            if field is not None and field.value is not None and not 0 <= field.value <= 1:
+                raise ValueError("data quality rate must be between 0 and 1")
+        if self.data_freshness_at and self.data_freshness_at.value:
+            require_aware(self.data_freshness_at.value, "data_freshness_at")
+        return self
+
+
+class CauseSignalContext(ContractModel):
+    booking_funnel_available: DecisionField[bool] | None = None
+    channel_attribution_available: DecisionField[bool] | None = None
+    value_price_signal_available: DecisionField[bool] | None = None
+    cancellation_evidence_available: DecisionField[bool] | None = None
+    broader_demand_proxy_available: DecisionField[bool] | None = None
 
 
 class GoalContext(ContractModel):
@@ -134,6 +208,10 @@ class OperationalCapacityContext(ContractModel):
     slot_capacity_confirmed: DecisionField[bool]
     offering_available: DecisionField[bool]
     target_population_count: DecisionField[int]
+    available_staff_count: DecisionField[int] | None = None
+    eligible_staff_count: DecisionField[int] | None = None
+    room_available: DecisionField[bool] | None = None
+    equipment_available: DecisionField[bool] | None = None
 
     @model_validator(mode="after")
     def validate_slot(self) -> OperationalCapacityContext:
@@ -148,12 +226,16 @@ class OfferingEligibilityContext(ContractModel):
     offering_id: str = Field(min_length=1)
     offering_name: str = Field(min_length=1)
     eligibility: DecisionField[OfferingEligibilityStatus]
+    target_slot_available: DecisionField[bool] | None = None
+    target_slot_visible: DecisionField[bool] | None = None
 
 
 class CustomerActivationContext(ContractModel):
     customer_token_available: DecisionField[bool]
     eligible_cohort_count: DecisionField[int]
     marketing_consent_capability: DecisionField[ConsentCapability]
+    completed_visit_history_available: DecisionField[bool] | None = None
+    revisit_interval_available: DecisionField[bool] | None = None
 
     @model_validator(mode="after")
     def validate_counts(self) -> CustomerActivationContext:
@@ -268,7 +350,9 @@ class DecisionContextSnapshot(ContractModel):
     data_window_start: datetime
     data_window_end: datetime
     opportunity: OpportunityContext
+    observation: LowDemandObservation | None = None
     goal: GoalContext | None = None
+    business_constraints: BusinessConstraintContext | None = None
     operation: OperationalCapacityContext | None = None
     offering: OfferingEligibilityContext | None = None
     customer_activation: CustomerActivationContext | None = None
@@ -276,6 +360,8 @@ class DecisionContextSnapshot(ContractModel):
     economics: EconomicsContext | None = None
     policy: HospitalPolicyContext | None = None
     measurement: MeasurementCapabilityContext | None = None
+    data_quality: DataQualityContext | None = None
+    cause_signals: CauseSignalContext | None = None
     limitations: tuple[str, ...] = ()
 
     def __init__(self, **data: Any) -> None:
