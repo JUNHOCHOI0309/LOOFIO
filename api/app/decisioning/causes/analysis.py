@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from app.decisioning.causes.data_quality import DataQualityAssessment, resolve_data_quality
@@ -53,10 +54,15 @@ class _CandidateEvaluation:
     strength: EvidenceStrength
 
 
-def analyze_low_demand_slot(snapshot: DecisionContextSnapshot) -> CauseAnalysisResult:
+def analyze_low_demand_slot(
+    snapshot: DecisionContextSnapshot, *, as_of: datetime | None = None
+) -> CauseAnalysisResult:
     """Produce a pure, deterministic Cause Analysis without raw-data access or persistence."""
     if snapshot.opportunity.opportunity_type != "LOW_DEMAND_SLOT":
         raise ValueError("Cause Analysis v1 supports LOW_DEMAND_SLOT only")
+    generated_at = as_of or snapshot.snapshot_at
+    if generated_at.tzinfo is None or generated_at.utcoffset() is None:
+        raise ValueError("as_of must include a UTC offset")
 
     quality = resolve_data_quality(snapshot)
     definitions = tuple(definition for definition in CAUSE_TAXONOMY if _is_seeded(definition, snapshot))
@@ -89,14 +95,14 @@ def analyze_low_demand_slot(snapshot: DecisionContextSnapshot) -> CauseAnalysisR
         *(f"Critical data quality condition: {reason}" for reason in quality.critical_reasons),
     )
     return CauseAnalysisResult(
-        id=_analysis_id(snapshot),
+        id=_analysis_id(snapshot, generated_at),
         status=run_status,
         tenant_id=snapshot.tenant_id,
         business_id=snapshot.business_id,
         opportunity_id=snapshot.opportunity_id,
         decision_context_snapshot_id=snapshot.snapshot_id,
         decision_context_hash=snapshot.context_hash or snapshot.calculate_hash(),
-        generated_at=snapshot.snapshot_at,
+        generated_at=generated_at,
         candidates=candidates,
         recommended_diagnostics=diagnostics,
         global_limitations=global_limitations,
@@ -469,7 +475,7 @@ def _run_status(candidates: tuple[CauseCandidate, ...], quality: DataQualityAsse
     return CauseRunStatus.NEEDS_DATA
 
 
-def _analysis_id(snapshot: DecisionContextSnapshot) -> str:
+def _analysis_id(snapshot: DecisionContextSnapshot, as_of: datetime) -> str:
     value = "|".join(
         (
             snapshot.tenant_id,
@@ -477,6 +483,7 @@ def _analysis_id(snapshot: DecisionContextSnapshot) -> str:
             snapshot.opportunity_id,
             snapshot.context_hash or snapshot.calculate_hash(),
             CAUSE_ANALYSIS_VERSION,
+            as_of.isoformat(),
         )
     )
     return f"CAUSE_RUN_{hashlib.sha256(value.encode('utf-8')).hexdigest()[:24]}"

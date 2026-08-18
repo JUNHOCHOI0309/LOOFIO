@@ -21,11 +21,20 @@ class OpportunityBusinessNotFound(RuntimeError):
     """Raised without disclosing whether another tenant owns a business."""
 
 
+@dataclass(frozen=True)
+class OpportunityScope:
+    """A server-resolved Opportunity and its tenant-scoped Business boundary."""
+
+    business_id: str
+    opportunity: Opportunity
+
+
 class OpportunityStore(Protocol):
     def refresh(self, *, tenant_id: str, business_id: str, drafts: list[OpportunityDraft]) -> list[Opportunity]: ...
     def refresh_low_demand(self, *, tenant_id: str, business_id: str, drafts: list[OpportunityDraft]) -> list[Opportunity]: ...
     def list_opportunities(self, *, tenant_id: str, business_id: str) -> list[Opportunity]: ...
     def get_opportunity(self, *, tenant_id: str, opportunity_id: str) -> Opportunity: ...
+    def get_opportunity_with_scope(self, *, tenant_id: str, opportunity_id: str) -> OpportunityScope: ...
 
 
 class PostgresOpportunityStore:
@@ -84,6 +93,11 @@ class PostgresOpportunityStore:
             return [_opportunity_from_row(row) for row in cursor.fetchall()]
 
     def get_opportunity(self, *, tenant_id: str, opportunity_id: str) -> Opportunity:
+        return self.get_opportunity_with_scope(
+            tenant_id=tenant_id, opportunity_id=opportunity_id
+        ).opportunity
+
+    def get_opportunity_with_scope(self, *, tenant_id: str, opportunity_id: str) -> OpportunityScope:
         with self._connection() as connection, connection.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
                 "SELECT * FROM opportunities WHERE id = %s AND tenant_id = %s",
@@ -92,7 +106,9 @@ class PostgresOpportunityStore:
             row = cursor.fetchone()
             if not row:
                 raise OpportunityBusinessNotFound("해당 기회에 접근할 수 없습니다.")
-            return _opportunity_from_row(row)
+            return OpportunityScope(
+                business_id=str(row["business_id"]), opportunity=_opportunity_from_row(row)
+            )
 
     def _assert_business(self, cursor, tenant_id: str, business_id: str) -> None:
         cursor.execute("SELECT 1 FROM businesses WHERE id = %s AND tenant_id = %s", (business_id, tenant_id))
@@ -144,9 +160,14 @@ class InMemoryOpportunityStore:
         )
 
     def get_opportunity(self, *, tenant_id: str, opportunity_id: str) -> Opportunity:
-        for (item_tenant, _, _, _, _), opportunity in self.opportunities.items():
+        return self.get_opportunity_with_scope(
+            tenant_id=tenant_id, opportunity_id=opportunity_id
+        ).opportunity
+
+    def get_opportunity_with_scope(self, *, tenant_id: str, opportunity_id: str) -> OpportunityScope:
+        for (item_tenant, business_id, _, _, _), opportunity in self.opportunities.items():
             if item_tenant == tenant_id and opportunity.id == opportunity_id:
-                return opportunity
+                return OpportunityScope(business_id=business_id, opportunity=opportunity)
         raise OpportunityBusinessNotFound("해당 기회에 접근할 수 없습니다.")
 
 def _opportunity_from_row(row: dict) -> Opportunity:
