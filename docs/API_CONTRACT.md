@@ -131,6 +131,20 @@ POST   /api/v1/recommendations/{recommendationId}/decisions
 `draft`는 저장된 Opportunity의 Observation·Estimate·limitations만 이용해 재현 가능한 Recommendation 초안을 만들거나 기존 초안을 반환한다. LowDemand·RevenueGap은 수동 시간대 실험 가설을, CancellationHotspot·ServiceDemandGap은 수동 운영 검토를, DormantCustomer는 가명 코호트 수준의 수동 재방문 기록 검토만 제안한다. DormantCustomer Recommendation에는 개별 customer token·연락처·메시지 대상이 포함되지 않는다. 이 요청 및 `approved` 결정은 외부 채널 실행을 만들지 않는다.
 Recommendation 초안과 결정은 `owner`, `admin`, `marketer` 역할만 생성할 수 있으며 `viewer`는 조회만 할 수 있다.
 
+## Cause Analysis Preview
+
+```text
+POST /api/v1/opportunities/{opportunityId}/cause-analyses/preview
+```
+
+`LOW_DEMAND_SLOT` Opportunity에 대해서만 Cause Analysis를 무저장으로 재계산한다. 요청은 `cause-preview-v1`, offset이 포함된 `as_of`, 그리고 사용자가 제공하는 `decision_context`를 포함한다.
+
+Opportunity ID, tenant/business scope, Opportunity Observation·detector metadata·source reference는 서버가 현재 tenant 범위에서 읽어 결합한다. 클라이언트가 이 server-controlled 값을, Cause score 또는 raw patient PII/clinical field를 제출하면 `422`다. 다른 tenant Opportunity는 `404`로 응답한다.
+
+응답은 `persisted: false` preview metadata, canonical input hash, server-bound Decision Context, Cause candidates와 Diagnostic Question을 포함한다. 같은 Opportunity·Context·`as_of`·engine version 조합은 같은 preview ID와 결과를 반환하며, DB Cause Run이나 외부 Action을 만들지 않는다. `owner`, `admin`, `marketer`만 실행할 수 있다.
+
+B03에서는 Diagnostic Answer를 별도 저장하거나 서버가 임의로 합성하지 않는다. 사용자는 Diagnostic Question에 맞춰 `decision_context`를 보완해 새 preview를 요청한다.
+
 ## Actions
 
 ```text

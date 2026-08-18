@@ -32,6 +32,22 @@ def require_active_tenant_user(request: Request) -> AuthenticatedUser:
     return user
 
 
+def require_decision_preview_editor(request: Request, *, user_id: str, tenant_id: str) -> None:
+    """Limit mutable-input previews to the same editor roles as Recommendation drafts."""
+    role = next(
+        (item.role for item in request.app.state.auth_store.list_tenants(user_id) if item.tenant_id == tenant_id),
+        None,
+    )
+    if role not in {"owner", "admin", "marketer"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "FORBIDDEN",
+                "message": "Cause Preview는 owner, admin 또는 marketer 역할만 수행할 수 있습니다.",
+            },
+        )
+
+
 def _raise_authentication_required() -> None:
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
